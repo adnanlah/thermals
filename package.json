@@ -1,0 +1,32 @@
+{
+  "name": "thermal-webusb-receipts",
+  "version": "1.0.0",
+  "description": "TypeScript Node.js app for printing simple receipts to thermal printers over WebUSB.",
+  "packageManager": "yarn@1.22.22",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "print": "node dist/index.js print",
+    "list-usb": "node dist/index.js list-usb",
+    "inspect-printer": "node dist/index.js inspect-printer",
+    "test-print": "node dist/index.js test-print",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "thermal-printer",
+    "receipt",
+    "webusb",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "node-thermal-printer": "^4.6.0",
+    "usb": "^2.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.12",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}
