@@ -4,13 +4,21 @@ import {
   ThermalPrinter
 } from "node-thermal-printer";
 import { receiptPrinterConfig } from "./config";
+import {
+  calculateReceiptTotals,
+  formatDiscountValue,
+  ReceiptDiscount,
+  roundMoney
+} from "./receiptTotals";
 
 const receiptCharacterSet = CharacterSet.WPC1256_ARABIC;
 
 export type ReceiptLineItem = {
   name: string;
   quantity: number;
+  unitName: string;
   unitPrice: number;
+  discount?: ReceiptDiscount;
 };
 
 export type Receipt = {
@@ -20,6 +28,7 @@ export type Receipt = {
   orderNumber: string;
   items: ReceiptLineItem[];
   taxRate: number;
+  globalDiscount?: ReceiptDiscount;
   paidWith: string;
 };
 
@@ -30,11 +39,24 @@ export function buildSampleReceipt(): Receipt {
     cashier: "Amina",
     orderNumber: "R-10042",
     taxRate: 0.07,
+    globalDiscount: { type: "fixed", value: 1 },
     paidWith: "CARD",
     items: [
-      { name: "Coffee", quantity: 2, unitPrice: 2.5 },
-      { name: "Croissant", quantity: 1, unitPrice: 3.25 },
-      { name: "Notebook", quantity: 1, unitPrice: 5.99 }
+      {
+        name: "Coffee",
+        quantity: 2,
+        unitName: "cup",
+        unitPrice: 2.5,
+        discount: { type: "percent", value: 10 }
+      },
+      {
+        name: "Croissant",
+        quantity: 1,
+        unitName: "pc",
+        unitPrice: 3.25,
+        discount: { type: "fixed", value: 0.25 }
+      },
+      { name: "Notebook", quantity: 1, unitName: "pc", unitPrice: 5.99 }
     ]
   };
 }
@@ -52,12 +74,11 @@ export function createReceiptBuffer(receipt: Receipt): Buffer {
   printer.add(Buffer.from([0x1b, 0x40, 0x1b, 0x3d, 0x01]));
   printer.setCharacterSet(receiptCharacterSet);
 
-  const subtotal = receipt.items.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0
+  const totals = calculateReceiptTotals(
+    receipt.items,
+    receipt.taxRate,
+    receipt.globalDiscount
   );
-  const tax = roundMoney(subtotal * receipt.taxRate);
-  const total = roundMoney(subtotal + tax);
 
   printer.alignCenter();
   printer.setTextDoubleHeight();
@@ -74,19 +95,48 @@ export function createReceiptBuffer(receipt: Receipt): Buffer {
   printer.leftRight("Cashier", receipt.cashier);
   printer.drawLine();
 
-  for (const item of receipt.items) {
+  for (const line of totals.lines) {
+    const item = line.item;
+
     printer.println(item.name);
     printer.leftRight(
-      `${item.quantity} x ${formatMoney(item.unitPrice)}`,
-      formatMoney(item.quantity * item.unitPrice)
+      `${item.quantity} ${item.unitName} * ${formatMoney(item.unitPrice)}`,
+      formatMoney(line.grossTotal)
     );
+
+    if (line.discountAmount > 0 && item.discount) {
+      printer.leftRight(
+        `Discount ${formatDiscountLabel(item.discount)}`,
+        `-${formatMoney(line.discountAmount)}`
+      );
+      printer.leftRight("After discount", formatMoney(line.netTotal));
+    }
   }
 
   printer.drawLine();
-  printer.leftRight("Subtotal", formatMoney(subtotal));
-  printer.leftRight(`Tax ${Math.round(receipt.taxRate * 100)}%`, formatMoney(tax));
+  printer.leftRight(
+    "Subtotal before discounts",
+    formatMoney(totals.subtotalBeforeDiscounts)
+  );
+
+  if (totals.lineDiscountTotal > 0) {
+    printer.leftRight("Line discounts", `-${formatMoney(totals.lineDiscountTotal)}`);
+  }
+
+  if (totals.globalDiscountAmount > 0 && receipt.globalDiscount) {
+    printer.leftRight(
+      `Global discount ${formatDiscountLabel(receipt.globalDiscount)}`,
+      `-${formatMoney(totals.globalDiscountAmount)}`
+    );
+  }
+
+  printer.leftRight("Taxable subtotal", formatMoney(totals.taxableSubtotal));
+  printer.leftRight(
+    `Tax ${Math.round(receipt.taxRate * 100)}%`,
+    formatMoney(totals.tax)
+  );
   printer.bold(true);
-  printer.leftRight("Total", formatMoney(total));
+  printer.leftRight("Total", formatMoney(totals.total));
   printer.bold(false);
   printer.leftRight("Paid with", receipt.paidWith);
 
@@ -99,10 +149,14 @@ export function createReceiptBuffer(receipt: Receipt): Buffer {
   return printer.getBuffer();
 }
 
-function formatMoney(value: number): string {
-  return `$${roundMoney(value).toFixed(2)}`;
+function formatDiscountLabel(discount: ReceiptDiscount): string {
+  if (discount.type === "percent") {
+    return formatDiscountValue(discount);
+  }
+
+  return formatMoney(discount.value);
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+function formatMoney(value: number): string {
+  return `$${roundMoney(value).toFixed(2)}`;
 }

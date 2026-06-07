@@ -10,6 +10,13 @@ import {
   SystemPrinterConfig,
   systemPrinterConfig
 } from "./config";
+import {
+  calculateReceiptTotals,
+  formatDiscountValue,
+  ReceiptDiscount,
+  ReceiptLineTotals,
+  roundMoney
+} from "./receiptTotals";
 
 type BitmapReceiptLine =
   | {
@@ -67,12 +74,11 @@ export async function printArabicBitmapReceiptWithWindows(
 }
 
 function createBitmapReceiptPayload(receipt: ArabicReceipt): BitmapReceiptPayload {
-  const subtotal = receipt.items.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0
+  const totals = calculateReceiptTotals(
+    receipt.items,
+    receipt.taxRate,
+    receipt.globalDiscount
   );
-  const tax = roundMoney(subtotal * receipt.taxRate);
-  const total = roundMoney(subtotal + tax);
   const lines: BitmapReceiptLine[] = [
     textLine(receipt.storeName, 32, true, "center", 8, 8),
     textLine(receipt.storeAddress, 24, false, "center", 0, 4),
@@ -83,32 +89,105 @@ function createBitmapReceiptPayload(receipt: ArabicReceipt): BitmapReceiptPayloa
     { kind: "separator", height: 14 }
   ];
 
-  for (const item of receipt.items) {
+  for (const line of totals.lines) {
+    const item = line.item;
+
     lines.push(textLine(item.name, 24, false, "right", 0, 2));
     lines.push(
       textLine(
-        formatLineItemCalculation(item),
+        formatLineItemCalculation(line),
         22,
         false,
         "right",
         0,
-        6
+        line.discountAmount > 0 ? 2 : 6
+      )
+    );
+
+    if (line.discountAmount > 0 && item.discount) {
+      lines.push(
+        textLine(
+          `خصم ${formatDiscountLabel(item.discount)}: -${formatArabicMoney(
+            line.discountAmount
+          )}`,
+          21,
+          false,
+          "right",
+          0,
+          2
+        ),
+        textLine(
+          `بعد الخصم: ${formatArabicMoney(line.netTotal)}`,
+          21,
+          false,
+          "right",
+          0,
+          6
+        )
+      );
+    }
+  }
+
+  lines.push(
+    { kind: "separator", height: 14 },
+    textLine(
+      `المجموع قبل الخصم: ${formatArabicMoney(totals.subtotalBeforeDiscounts)}`,
+      24,
+      false,
+      "right",
+      0,
+      4
+    )
+  );
+
+  if (totals.lineDiscountTotal > 0) {
+    lines.push(
+      textLine(
+        `خصم السطور: -${formatArabicMoney(totals.lineDiscountTotal)}`,
+        24,
+        false,
+        "right",
+        0,
+        4
+      )
+    );
+  }
+
+  if (totals.globalDiscountAmount > 0 && receipt.globalDiscount) {
+    lines.push(
+      textLine(
+        `الخصم العام ${formatDiscountLabel(
+          receipt.globalDiscount
+        )}: -${formatArabicMoney(totals.globalDiscountAmount)}`,
+        24,
+        false,
+        "right",
+        0,
+        4
       )
     );
   }
 
   lines.push(
-    { kind: "separator", height: 14 },
-    textLine(`المجموع الفرعي: ${formatArabicMoney(subtotal)}`, 24, false, "right", 0, 4),
     textLine(
-      `الضريبة ${Math.round(receipt.taxRate * 100)}%: ${formatArabicMoney(tax)}`,
+      `المبلغ الخاضع للضريبة: ${formatArabicMoney(totals.taxableSubtotal)}`,
       24,
       false,
       "right",
       0,
       4
     ),
-    textLine(`الإجمالي: ${formatArabicMoney(total)}`, 28, true, "right", 2, 6),
+    textLine(
+      `الضريبة ${Math.round(receipt.taxRate * 100)}%: ${formatArabicMoney(
+        totals.tax
+      )}`,
+      24,
+      false,
+      "right",
+      0,
+      4
+    ),
+    textLine(`الإجمالي: ${formatArabicMoney(totals.total)}`, 28, true, "right", 2, 6),
     textLine(`طريقة الدفع: ${receipt.paidWith}`, 24, false, "right", 0, 10),
     { kind: "blank", height: 8 },
     textLine("شكرا لزيارتكم", 26, true, "center", 0, 10)
@@ -117,10 +196,14 @@ function createBitmapReceiptPayload(receipt: ArabicReceipt): BitmapReceiptPayloa
   return { lines };
 }
 
-function formatLineItemCalculation(item: ArabicReceipt["items"][number]): string {
-  return `${item.quantity} * ${formatArabicMoney(
+function formatLineItemCalculation(
+  line: ReceiptLineTotals<ArabicReceipt["items"][number]>
+): string {
+  const item = line.item;
+
+  return `${item.quantity} ${item.unitName} * ${formatArabicMoney(
     item.unitPrice
-  )} = ${formatArabicMoney(item.quantity * item.unitPrice)}`;
+  )} = ${formatArabicMoney(line.grossTotal)}`;
 }
 
 function textLine(
@@ -167,6 +250,14 @@ function formatArabicMoney(value: number): string {
   return `${roundMoney(value).toFixed(2)} دج`;
 }
 
+function formatDiscountLabel(discount: ReceiptDiscount): string {
+  if (discount.type === "percent") {
+    return formatDiscountValue(discount);
+  }
+
+  return formatArabicMoney(discount.value);
+}
+
 function formatArabicDate(date: Date): string {
   return date.toLocaleString("ar-DZ", {
     year: "numeric",
@@ -175,10 +266,6 @@ function formatArabicDate(date: Date): string {
     hour: "2-digit",
     minute: "2-digit"
   });
-}
-
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function ensureWindows(): void {

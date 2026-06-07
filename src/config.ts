@@ -58,7 +58,7 @@ export const receiptPrinterConfig: ReceiptPrinterConfig = {
 };
 
 export const systemPrinterConfig: SystemPrinterConfig = {
-  printerName: "Xprinter XP-T371U",
+  printerName: "POSPrinter POS80",
   docName: "Thermal Receipt"
 };
 
@@ -68,7 +68,7 @@ export const arabicBitmapPrinterConfig: ArabicBitmapPrinterConfig = {
   // Extra paper feed after the final thank-you message.
   feedAfterReceiptLines: 5,
   // Enable only for printers with a supported cutter.
-  cutAfterPrint: false
+  cutAfterPrint: true
 };
 
 export function hasConfiguredUsbPrinterIds(

@@ -3,11 +3,19 @@ import {
   ThermalPrinter
 } from "node-thermal-printer";
 import { receiptPrinterConfig } from "./config";
+import {
+  calculateReceiptTotals,
+  formatDiscountValue,
+  ReceiptDiscount,
+  roundMoney
+} from "./receiptTotals";
 
 export type ArabicReceiptLineItem = {
   name: string;
   quantity: number;
+  unitName: string;
   unitPrice: number;
+  discount?: ReceiptDiscount;
 };
 
 export type ArabicReceipt = {
@@ -17,6 +25,7 @@ export type ArabicReceipt = {
   orderNumber: string;
   items: ArabicReceiptLineItem[];
   taxRate: number;
+  globalDiscount?: ReceiptDiscount;
   paidWith: string;
 };
 
@@ -26,11 +35,24 @@ export const arabicReceiptPayload: ArabicReceipt = {
   cashier: "أمينة",
   orderNumber: "AR-10042",
   taxRate: 0.07,
+  globalDiscount: { type: "fixed", value: 100 },
   paidWith: "بطاقة بنكية",
   items: [
-    { name: "قهوة", quantity: 2, unitPrice: 250 },
-    { name: "كرواسون", quantity: 1, unitPrice: 325 },
-    { name: "دفتر", quantity: 1, unitPrice: 599 }
+    {
+      name: "قهوة",
+      quantity: 2,
+      unitName: "كوب",
+      unitPrice: 250,
+      discount: { type: "percent", value: 10 }
+    },
+    {
+      name: "كرواسون",
+      quantity: 1,
+      unitName: "قطعة",
+      unitPrice: 325,
+      discount: { type: "fixed", value: 25 }
+    },
+    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 599 }
   ]
 };
 
@@ -49,12 +71,11 @@ export function createArabicReceiptBuffer(
   printer.add(Buffer.from([0x1b, 0x40, 0x1b, 0x3d, 0x01]));
   printer.setCharacterSet(receiptPrinterConfig.arabicCharacterSet);
 
-  const subtotal = receipt.items.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0
+  const totals = calculateReceiptTotals(
+    receipt.items,
+    receipt.taxRate,
+    receipt.globalDiscount
   );
-  const tax = roundMoney(subtotal * receipt.taxRate);
-  const total = roundMoney(subtotal + tax);
 
   printArabicCentered(printer, receipt.storeName, true);
   printArabicCentered(printer, receipt.storeAddress);
@@ -65,24 +86,62 @@ export function createArabicReceiptBuffer(
   printArabicLine(printer, `الكاشير: ${receipt.cashier}`);
   printer.drawLine();
 
-  for (const item of receipt.items) {
+  for (const line of totals.lines) {
+    const item = line.item;
+
     printArabicLine(printer, item.name);
     printArabicLine(
       printer,
-      `${item.quantity} x ${formatArabicMoney(item.unitPrice)} = ${formatArabicMoney(
-        item.quantity * item.unitPrice
-      )}`
+      `${item.quantity} ${item.unitName} * ${formatArabicMoney(
+        item.unitPrice
+      )} = ${formatArabicMoney(line.grossTotal)}`
     );
+
+    if (line.discountAmount > 0 && item.discount) {
+      printArabicLine(
+        printer,
+        `خصم ${formatDiscountLabel(item.discount)}: -${formatArabicMoney(
+          line.discountAmount
+        )}`
+      );
+      printArabicLine(printer, `بعد الخصم: ${formatArabicMoney(line.netTotal)}`);
+    }
   }
 
   printer.drawLine();
-  printArabicLine(printer, `المجموع الفرعي: ${formatArabicMoney(subtotal)}`);
   printArabicLine(
     printer,
-    `الضريبة ${Math.round(receipt.taxRate * 100)}%: ${formatArabicMoney(tax)}`
+    `المجموع قبل الخصم: ${formatArabicMoney(totals.subtotalBeforeDiscounts)}`
+  );
+
+  if (totals.lineDiscountTotal > 0) {
+    printArabicLine(
+      printer,
+      `خصم السطور: -${formatArabicMoney(totals.lineDiscountTotal)}`
+    );
+  }
+
+  if (totals.globalDiscountAmount > 0 && receipt.globalDiscount) {
+    printArabicLine(
+      printer,
+      `الخصم العام ${formatDiscountLabel(
+        receipt.globalDiscount
+      )}: -${formatArabicMoney(totals.globalDiscountAmount)}`
+    );
+  }
+
+  printArabicLine(
+    printer,
+    `المبلغ الخاضع للضريبة: ${formatArabicMoney(totals.taxableSubtotal)}`
+  );
+  printArabicLine(
+    printer,
+    `الضريبة ${Math.round(receipt.taxRate * 100)}%: ${formatArabicMoney(
+      totals.tax
+    )}`
   );
   printer.bold(true);
-  printArabicLine(printer, `الإجمالي: ${formatArabicMoney(total)}`);
+  printArabicLine(printer, `الإجمالي: ${formatArabicMoney(totals.total)}`);
   printer.bold(false);
   printArabicLine(printer, `طريقة الدفع: ${receipt.paidWith}`);
 
@@ -133,6 +192,14 @@ function reverseRtlTextForSingleBytePrinter(text: string): string {
   return tokens.reverse().join("");
 }
 
+function formatDiscountLabel(discount: ReceiptDiscount): string {
+  if (discount.type === "percent") {
+    return formatDiscountValue(discount);
+  }
+
+  return formatArabicMoney(discount.value);
+}
+
 function formatArabicMoney(value: number): string {
   return `${roundMoney(value).toFixed(2)} دج`;
 }
@@ -145,8 +212,4 @@ function formatArabicDate(date: Date): string {
     hour: "2-digit",
     minute: "2-digit"
   });
-}
-
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
 }

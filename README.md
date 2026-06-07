@@ -77,6 +77,20 @@ Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows sp
 
 The bitmap Arabic path is controlled by `arabicBitmapPrinterConfig` in `src/config.ts`. Set `feedAfterReceiptLines` for the paper feed after the thank-you message. Keep `cutAfterPrint` false for printers without a supported cutter.
 
+Arabic receipt items support unit names and optional line discounts:
+
+```ts
+{
+  name: "قهوة",
+  quantity: 2,
+  unitName: "كوب",
+  unitPrice: 250,
+  discount: { type: "percent", value: 10 }
+}
+```
+
+Discounts can be `{ type: "percent", value: 10 }` or `{ type: "fixed", value: 25 }`. A receipt can also define `globalDiscount`, which is applied after line discounts and before tax. The calculation order is: line subtotal, line discount, global discount, taxable subtotal, tax, total.
+
 ## Windows Notes
 
 On Windows, the `usb` package talks through libusb. If opening the printer fails with `LIBUSB_ERROR_NOT_SUPPORTED`, install the WinUSB driver for the printer with Zadig. The system printer driver and WinUSB driver cannot both own the same USB interface at the same time.
