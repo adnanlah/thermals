@@ -25,6 +25,12 @@ export type SystemPrinterConfig = {
   docName: string;
 };
 
+export type ArabicBitmapPrinterConfig = {
+  widthDots: number;
+  feedAfterReceiptLines: number;
+  cutAfterPrint: boolean;
+};
+
 export const usbPrinterConfig: UsbPrinterConfig = {
   // Replace these with the VID/PID values from Zadig, for example 0x04b8.
   vendorId: 0x1FC9,
@@ -52,9 +58,17 @@ export const receiptPrinterConfig: ReceiptPrinterConfig = {
 };
 
 export const systemPrinterConfig: SystemPrinterConfig = {
-  // Replace this with the exact Windows printer name, for example "XP-Q371U".
   printerName: "Xprinter XP-T371U",
   docName: "Thermal Receipt"
+};
+
+export const arabicBitmapPrinterConfig: ArabicBitmapPrinterConfig = {
+  // 80 mm thermal printers are commonly 576 dots wide. Use 384 for 58 mm.
+  widthDots: 576,
+  // Extra paper feed after the final thank-you message.
+  feedAfterReceiptLines: 5,
+  // Enable only for printers with a supported cutter.
+  cutAfterPrint: false
 };
 
 export function hasConfiguredUsbPrinterIds(

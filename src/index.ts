@@ -2,6 +2,7 @@ import {
   arabicReceiptPayload,
   createArabicReceiptBuffer
 } from "./arabicReceipt";
+import { createRawArabicReceiptBuffer } from "./rawArabicReceipt";
 import { buildSampleReceipt, createReceiptBuffer } from "./receipt";
 import {
   hasConfiguredUsbPrinterIds,
@@ -13,6 +14,7 @@ import {
   listSystemPrinters,
   printBufferWithSystemPrinter
 } from "./systemPrinter";
+import { printArabicBitmapReceiptWithWindows } from "./windowsArabicBitmapPrinter";
 import {
   describeConfiguredUsbPrinter,
   listUsbDevices,
@@ -38,7 +40,16 @@ async function main(selectedCommand: string): Promise<void> {
       await printSampleReceiptWithSystemPrinter();
       return;
     case "print-arabic-system":
-      await printArabicReceiptWithSystemPrinter();
+      await printArabicBitmapReceiptWithSystemPrinter();
+      return;
+    case "print-arabic-text-system":
+      await printTextArabicReceiptWithSystemPrinter();
+      return;
+    case "print-arabic-raw-system":
+      await printRawArabicReceiptWithSystemPrinter();
+      return;
+    case "print-arabic-bitmap-system":
+      await printArabicBitmapReceiptWithSystemPrinter();
       return;
     case "list-system-printers":
       listInstalledSystemPrinters();
@@ -101,16 +112,37 @@ async function printSampleReceiptWithSystemPrinter(): Promise<void> {
   console.log(result);
 }
 
-async function printArabicReceiptWithSystemPrinter(): Promise<void> {
+async function printTextArabicReceiptWithSystemPrinter(): Promise<void> {
   const buffer = createArabicReceiptBuffer(arabicReceiptPayload);
 
   console.log(
-    `Sending ${buffer.length} Arabic receipt bytes through ${getSystemPrinterInterface()}...`
+    `Sending ${buffer.length} text Arabic receipt bytes through ${getSystemPrinterInterface()}...`
   );
   const result = await printBufferWithSystemPrinter(buffer, {
     ...systemPrinterConfig,
     docName: "Arabic Thermal Receipt"
   });
+  console.log(result);
+}
+
+async function printRawArabicReceiptWithSystemPrinter(): Promise<void> {
+  const buffer = createRawArabicReceiptBuffer(arabicReceiptPayload);
+
+  console.log(
+    `Sending ${buffer.length} raw Arabic receipt bytes through ${getSystemPrinterInterface()}...`
+  );
+  const result = await printBufferWithSystemPrinter(buffer, {
+    ...systemPrinterConfig,
+    docName: "Raw Arabic Thermal Receipt"
+  });
+  console.log(result);
+}
+
+async function printArabicBitmapReceiptWithSystemPrinter(): Promise<void> {
+  console.log(
+    `Rendering Arabic receipt as a bitmap and printing through ${getSystemPrinterInterface()}...`
+  );
+  const result = await printArabicBitmapReceiptWithWindows(arabicReceiptPayload);
   console.log(result);
 }
 
@@ -179,6 +211,9 @@ function printUsage(): void {
   console.log("  npm run print-arabic");
   console.log("  npm run print-system");
   console.log("  npm run print-arabic-system");
+  console.log("  npm run print-arabic-text-system");
+  console.log("  npm run print-arabic-raw-system");
+  console.log("  npm run print-arabic-bitmap-system");
   console.log("  npm run list-system-printers");
   console.log("  npm run list-usb");
   console.log("  npm run inspect-printer");

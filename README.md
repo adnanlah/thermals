@@ -29,6 +29,9 @@ corepack yarn print-arabic
 corepack yarn list-system-printers
 corepack yarn print-system
 corepack yarn print-arabic-system
+corepack yarn print-arabic-text-system
+corepack yarn print-arabic-raw-system
+corepack yarn print-arabic-bitmap-system
 ```
 
 `list-usb` prints connected USB device descriptors so you can confirm the VID/PID visible to Node.
@@ -66,7 +69,13 @@ This route does not use Zadig, WinUSB, VID, or PID. It requires a Windows printe
 
 Also note that this mode needs Windows to own the printer as a normal printer device. If you replaced the USB driver with WinUSB in Zadig, switch it back to the Xprinter/USB printer driver before using `printer:My Printer`.
 
-Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows spooler. That means Windows does not render Arabic for you in this mode; it still depends on printer firmware/code-page support unless you print Arabic as a bitmap image.
+Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows spooler. That means Windows does not render Arabic for you in text mode; it still depends on printer firmware/code-page support unless you print Arabic as a bitmap image.
+
+`print-arabic-system` is the recommended Arabic path. It renders Arabic with Windows text shaping into a raster image and sends that image as ESC/POS, so it does not depend on the printer's Arabic code page support. `print-arabic-bitmap-system` is kept as an explicit alias for the same bitmap approach.
+
+`print-arabic-text-system` and `print-arabic-raw-system` are diagnostic text-mode paths. They are useful for testing printer firmware code pages, but many low-cost thermal printers print Arabic text bytes as mojibake or Chinese-looking glyphs.
+
+The bitmap Arabic path is controlled by `arabicBitmapPrinterConfig` in `src/config.ts`. Set `feedAfterReceiptLines` for the paper feed after the thank-you message. Keep `cutAfterPrint` false for printers without a supported cutter.
 
 ## Windows Notes
 
