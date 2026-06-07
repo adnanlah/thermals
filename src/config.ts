@@ -1,4 +1,4 @@
-import { PrinterTypes } from "node-thermal-printer";
+import { CharacterSet, PrinterTypes } from "node-thermal-printer";
 
 export type UsbPrinterConfig = {
   vendorId: number;
@@ -16,6 +16,13 @@ export type UsbPrinterConfig = {
 export type ReceiptPrinterConfig = {
   type: PrinterTypes;
   width: number;
+  arabicCharacterSet: CharacterSet;
+  reverseArabicOutput: boolean;
+};
+
+export type SystemPrinterConfig = {
+  printerName: string;
+  docName: string;
 };
 
 export const usbPrinterConfig: UsbPrinterConfig = {
@@ -39,6 +46,15 @@ export const usbPrinterConfig: UsbPrinterConfig = {
 export const receiptPrinterConfig: ReceiptPrinterConfig = {
   type: PrinterTypes.EPSON,
   width: 48,
+  arabicCharacterSet: CharacterSet.WPC1256_ARABIC,
+  // Set to false if your printer firmware already handles Arabic RTL ordering.
+  reverseArabicOutput: true
+};
+
+export const systemPrinterConfig: SystemPrinterConfig = {
+  // Replace this with the exact Windows printer name, for example "XP-Q371U".
+  printerName: "Xprinter XP-T371U",
+  docName: "Thermal Receipt"
 };
 
 export function hasConfiguredUsbPrinterIds(

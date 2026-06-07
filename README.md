@@ -25,6 +25,10 @@ corepack yarn list-usb
 corepack yarn inspect-printer
 corepack yarn test-print
 corepack yarn print
+corepack yarn print-arabic
+corepack yarn list-system-printers
+corepack yarn print-system
+corepack yarn print-arabic-system
 ```
 
 `list-usb` prints connected USB device descriptors so you can confirm the VID/PID visible to Node.
@@ -35,7 +39,34 @@ corepack yarn print
 
 The default receipt intentionally avoids QR/image commands. Once plain text prints reliably, add those features back one at a time because many inexpensive ESC/POS-compatible printers support only a subset of barcode commands.
 
+`print-arabic` prints the Arabic payload from `src/arabicReceipt.ts` using the Arabic code page configured in `src/config.ts`. The default is `WPC1256_ARABIC`. If the text comes out backwards, toggle `reverseArabicOutput` in `src/config.ts`.
+
 Run only one print command at a time. USB printer interfaces can be claimed by one process only, so parallel `test-print` and `print` runs will make one of them fail device selection.
+
+## Windows System Printer Mode
+
+If you want to print by Windows printer name instead of VID/PID, install the printer in Windows and set the exact name in `src/config.ts`:
+
+```ts
+export const systemPrinterConfig = {
+  printerName: "Xprinter XP-T371U",
+  docName: "Thermal Receipt"
+};
+```
+
+The system-printer commands use `node-thermal-printer` with `interface: "printer:My Printer"` and the app's built-in custom Windows spooler driver, so it does not need old native npm printer packages.
+
+```bash
+corepack yarn list-system-printers
+corepack yarn print-system
+corepack yarn print-arabic-system
+```
+
+This route does not use Zadig, WinUSB, VID, or PID. It requires a Windows printer installation and sends RAW ESC/POS bytes to the Windows spooler.
+
+Also note that this mode needs Windows to own the printer as a normal printer device. If you replaced the USB driver with WinUSB in Zadig, switch it back to the Xprinter/USB printer driver before using `printer:My Printer`.
+
+Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows spooler. That means Windows does not render Arabic for you in this mode; it still depends on printer firmware/code-page support unless you print Arabic as a bitmap image.
 
 ## Windows Notes
 
