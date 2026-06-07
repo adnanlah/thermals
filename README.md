@@ -34,6 +34,8 @@ corepack yarn print-arabic-raw-system
 corepack yarn print-arabic-bitmap-system
 corepack yarn print-arabic-canvas-system
 corepack yarn render-arabic-canvas-bitmap
+corepack yarn print-arabic-puppeteer-system
+corepack yarn render-arabic-puppeteer-bitmap
 ```
 
 `list-usb` prints connected USB device descriptors so you can confirm the VID/PID visible to Node.
@@ -76,6 +78,8 @@ Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows sp
 `print-arabic-system` is the recommended Arabic path. It renders Arabic with Windows text shaping into a raster image and sends that image as ESC/POS, so it does not depend on the printer's Arabic code page support. `print-arabic-bitmap-system` is kept as an explicit alias for the same bitmap approach.
 
 `print-arabic-canvas-system` is an alternate Arabic bitmap path that renders the receipt with `node-canvas` instead of PowerShell/System.Drawing. It still sends RAW ESC/POS raster bytes to the Windows printer, so Windows does not rescale a PNG/JPEG before printing. `render-arabic-canvas-bitmap` writes a preview PNG to `dist/arabic-receipt-node-canvas.png` without printing.
+
+`print-arabic-puppeteer-system` is another Arabic bitmap path that renders an HTML/CSS receipt in Puppeteer, screenshots the receipt element at the configured supersampling scale, and then uses the same final 1-bit ESC/POS raster conversion. It embeds `src/assets/NotoNaskhArabic-VariableFont_wght.ttf` into the generated HTML so Arabic text rendering is consistent. `render-arabic-puppeteer-bitmap` writes the final monochrome preview to `dist/arabic-receipt-puppeteer.png`.
 
 `print-arabic-text-system` and `print-arabic-raw-system` are diagnostic text-mode paths. They are useful for testing printer firmware code pages, but many low-cost thermal printers print Arabic text bytes as mojibake or Chinese-looking glyphs.
 

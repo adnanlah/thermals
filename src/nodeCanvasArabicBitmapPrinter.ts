@@ -6,15 +6,17 @@ import {
 } from "canvas";
 import { ArabicReceipt } from "./arabicReceipt";
 import {
+  NormalizedArabicBitmapPrinterConfig,
+  normalizeArabicBitmapPrinterConfig
+} from "./arabicBitmapConfig";
+import { createMonochromePreviewPngBuffer } from "./bitmapPreview";
+import {
   ArabicBitmapPrinterConfig,
   arabicBitmapPrinterConfig,
   SystemPrinterConfig,
   systemPrinterConfig
 } from "./config";
-import {
-  createEscposBitmapPrintBuffer,
-  createMonochromePreviewRgba
-} from "./escposRaster";
+import { createEscposBitmapPrintBuffer } from "./escposRaster";
 import { printBufferWithSystemPrinter } from "./systemPrinter";
 import {
   BitmapReceiptLine,
@@ -22,14 +24,6 @@ import {
 } from "./windowsArabicBitmapPrinter";
 
 type BitmapTextLine = Extract<BitmapReceiptLine, { kind: "text" }>;
-
-type NormalizedCanvasBitmapConfig = ArabicBitmapPrinterConfig & {
-  widthDots: number;
-  printerDpi: number;
-  renderScale: number;
-  monochromeThreshold: number;
-  fontFamily: string;
-};
 
 type TextDrawOperation = {
   kind: "text";
@@ -69,7 +63,7 @@ export function createArabicBitmapReceiptWithNodeCanvas(
   receipt: ArabicReceipt,
   bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig
 ): NodeCanvasArabicBitmapReceipt {
-  const config = normalizeBitmapConfig(bitmapConfig);
+  const config = normalizeArabicBitmapPrinterConfig(bitmapConfig);
   const payload = createArabicBitmapReceiptPayload(receipt);
   const measuringCanvas = createCanvas(config.widthDots, 1);
   const measuringContext = configureCanvasContext(
@@ -112,48 +106,16 @@ export function createArabicBitmapReceiptWithNodeCanvas(
     feedAfterReceiptLines: config.feedAfterReceiptLines,
     cutAfterPrint: config.cutAfterPrint
   });
-  const previewCanvas = createMonochromePreviewCanvas(rasterSource);
 
   return {
     escposBuffer,
-    pngBuffer: previewCanvas.toBuffer("image/png", {
-      resolution: config.printerDpi
-    }),
+    pngBuffer: createMonochromePreviewPngBuffer(rasterSource, config.printerDpi),
     widthDots: config.widthDots,
     heightDots: layout.heightDots,
     printerDpi: config.printerDpi,
     renderScale: config.renderScale,
     monochromeThreshold: config.monochromeThreshold
   };
-}
-
-function createMonochromePreviewCanvas(
-  rasterSource: {
-    data: Uint8ClampedArray;
-    sourceWidth: number;
-    sourceHeight: number;
-    targetWidth: number;
-    targetHeight: number;
-    monochromeThreshold: number;
-  }
-) {
-  const previewCanvas = createCanvas(
-    rasterSource.targetWidth,
-    rasterSource.targetHeight
-  );
-  const previewContext = previewCanvas.getContext("2d", {
-    alpha: false,
-    pixelFormat: "RGB24"
-  });
-  const previewImage = previewContext.createImageData(
-    rasterSource.targetWidth,
-    rasterSource.targetHeight
-  );
-
-  previewImage.data.set(createMonochromePreviewRgba(rasterSource));
-  previewContext.putImageData(previewImage, 0, 0);
-
-  return previewCanvas;
 }
 
 export function createArabicBitmapReceiptBufferWithNodeCanvas(
@@ -195,7 +157,7 @@ export async function printArabicBitmapReceiptWithNodeCanvas(
 function createReceiptLayout(
   lines: BitmapReceiptLine[],
   context: CanvasRenderingContext2D,
-  config: NormalizedCanvasBitmapConfig
+  config: NormalizedArabicBitmapPrinterConfig
 ): CanvasReceiptLayout {
   const operations: DrawOperation[] = [];
   const textWidth = config.widthDots - HORIZONTAL_PADDING_DOTS * 2;
@@ -264,7 +226,7 @@ function isBitmapTextLine(line: BitmapReceiptLine): line is BitmapTextLine {
 function renderReceiptLayout(
   context: CanvasRenderingContext2D,
   layout: CanvasReceiptLayout,
-  config: NormalizedCanvasBitmapConfig
+  config: NormalizedArabicBitmapPrinterConfig
 ): void {
   context.fillStyle = "white";
   context.fillRect(0, 0, config.widthDots, layout.heightDots);
@@ -343,7 +305,7 @@ function measureLineHeight(
 
 function createFont(
   line: BitmapTextLine,
-  config: NormalizedCanvasBitmapConfig
+  config: NormalizedArabicBitmapPrinterConfig
 ): string {
   const weight = line.bold ? "700" : "400";
   const fontFamily = quoteFontFamily(config.fontFamily);
@@ -353,22 +315,4 @@ function createFont(
 
 function quoteFontFamily(fontFamily: string): string {
   return `"${fontFamily.replace(/"/g, "")}"`;
-}
-
-function normalizeBitmapConfig(
-  config: ArabicBitmapPrinterConfig
-): NormalizedCanvasBitmapConfig {
-  return {
-    ...config,
-    widthDots: Math.max(1, Math.floor(config.widthDots)),
-    printerDpi: Math.max(72, Math.floor(config.printerDpi)),
-    renderScale: clampInteger(config.renderScale, 1, 4),
-    monochromeThreshold: clampInteger(config.monochromeThreshold, 1, 255),
-    fontFamily: config.fontFamily.trim() || "Tahoma",
-    feedAfterReceiptLines: Math.max(0, Math.floor(config.feedAfterReceiptLines))
-  };
-}
-
-function clampInteger(value: number, min: number, max: number): number {
-  return Math.min(Math.max(Math.floor(value), min), max);
 }

@@ -21,6 +21,10 @@ import {
   saveArabicBitmapReceiptPreviewWithNodeCanvas
 } from "./nodeCanvasArabicBitmapPrinter";
 import {
+  printArabicBitmapReceiptWithPuppeteer,
+  saveArabicBitmapReceiptPreviewWithPuppeteer
+} from "./puppeteerArabicBitmapPrinter";
+import {
   describeConfiguredUsbPrinter,
   listUsbDevices,
   printBufferOverWebUsb
@@ -61,6 +65,12 @@ async function main(selectedCommand: string): Promise<void> {
       return;
     case "render-arabic-canvas-bitmap":
       await renderArabicNodeCanvasBitmapPreview();
+      return;
+    case "print-arabic-puppeteer-system":
+      await printArabicPuppeteerBitmapReceiptWithSystemPrinter();
+      return;
+    case "render-arabic-puppeteer-bitmap":
+      await renderArabicPuppeteerBitmapPreview();
       return;
     case "list-system-printers":
       listInstalledSystemPrinters();
@@ -181,6 +191,30 @@ async function renderArabicNodeCanvasBitmapPreview(): Promise<void> {
   );
 }
 
+async function printArabicPuppeteerBitmapReceiptWithSystemPrinter(): Promise<void> {
+  console.log(
+    `Rendering Arabic receipt with Puppeteer and printing through ${getSystemPrinterInterface()}...`
+  );
+  const result = await printArabicBitmapReceiptWithPuppeteer(arabicReceiptPayload);
+  console.log(result);
+}
+
+async function renderArabicPuppeteerBitmapPreview(): Promise<void> {
+  const outputPath = join(
+    process.cwd(),
+    "dist",
+    "arabic-receipt-puppeteer.png"
+  );
+  const rendered = await saveArabicBitmapReceiptPreviewWithPuppeteer(
+    outputPath,
+    arabicReceiptPayload
+  );
+
+  console.log(
+    `Saved ${rendered.widthDots}x${rendered.heightDots} Puppeteer bitmap preview at ${rendered.printerDpi} DPI to ${outputPath}`
+  );
+}
+
 function listInstalledSystemPrinters(): void {
   const printers = listSystemPrinters();
 
@@ -251,6 +285,8 @@ function printUsage(): void {
   console.log("  npm run print-arabic-bitmap-system");
   console.log("  npm run print-arabic-canvas-system");
   console.log("  npm run render-arabic-canvas-bitmap");
+  console.log("  npm run print-arabic-puppeteer-system");
+  console.log("  npm run render-arabic-puppeteer-bitmap");
   console.log("  npm run list-system-printers");
   console.log("  npm run list-usb");
   console.log("  npm run inspect-printer");
