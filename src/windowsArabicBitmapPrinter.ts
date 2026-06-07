@@ -18,7 +18,7 @@ import {
   roundMoney
 } from "./receiptTotals";
 
-type BitmapReceiptLine =
+export type BitmapReceiptLine =
   | {
       kind: "text";
       text: string;
@@ -33,7 +33,7 @@ type BitmapReceiptLine =
       height: number;
     };
 
-type BitmapReceiptPayload = {
+export type BitmapReceiptPayload = {
   lines: BitmapReceiptLine[];
 };
 
@@ -47,7 +47,7 @@ export async function printArabicBitmapReceiptWithWindows(
   const directory = await mkdtemp(join(tmpdir(), "thermal-arabic-bitmap-"));
   const scriptPath = join(directory, `${randomUUID()}.ps1`);
   const payload = Buffer.from(
-    JSON.stringify(createBitmapReceiptPayload(receipt)),
+    JSON.stringify(createArabicBitmapReceiptPayload(receipt)),
     "utf8"
   ).toString("base64");
 
@@ -73,7 +73,9 @@ export async function printArabicBitmapReceiptWithWindows(
   }
 }
 
-function createBitmapReceiptPayload(receipt: ArabicReceipt): BitmapReceiptPayload {
+export function createArabicBitmapReceiptPayload(
+  receipt: ArabicReceipt
+): BitmapReceiptPayload {
   const totals = calculateReceiptTotals(
     receipt.items,
     receipt.taxRate,

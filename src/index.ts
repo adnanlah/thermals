@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
   arabicReceiptPayload,
   createArabicReceiptBuffer
@@ -15,6 +16,10 @@ import {
   printBufferWithSystemPrinter
 } from "./systemPrinter";
 import { printArabicBitmapReceiptWithWindows } from "./windowsArabicBitmapPrinter";
+import {
+  printArabicBitmapReceiptWithNodeCanvas,
+  saveArabicBitmapReceiptPreviewWithNodeCanvas
+} from "./nodeCanvasArabicBitmapPrinter";
 import {
   describeConfiguredUsbPrinter,
   listUsbDevices,
@@ -50,6 +55,12 @@ async function main(selectedCommand: string): Promise<void> {
       return;
     case "print-arabic-bitmap-system":
       await printArabicBitmapReceiptWithSystemPrinter();
+      return;
+    case "print-arabic-canvas-system":
+      await printArabicNodeCanvasBitmapReceiptWithSystemPrinter();
+      return;
+    case "render-arabic-canvas-bitmap":
+      await renderArabicNodeCanvasBitmapPreview();
       return;
     case "list-system-printers":
       listInstalledSystemPrinters();
@@ -146,6 +157,30 @@ async function printArabicBitmapReceiptWithSystemPrinter(): Promise<void> {
   console.log(result);
 }
 
+async function printArabicNodeCanvasBitmapReceiptWithSystemPrinter(): Promise<void> {
+  console.log(
+    `Rendering Arabic receipt with node-canvas and printing through ${getSystemPrinterInterface()}...`
+  );
+  const result = await printArabicBitmapReceiptWithNodeCanvas(arabicReceiptPayload);
+  console.log(result);
+}
+
+async function renderArabicNodeCanvasBitmapPreview(): Promise<void> {
+  const outputPath = join(
+    process.cwd(),
+    "dist",
+    "arabic-receipt-node-canvas.png"
+  );
+  const rendered = await saveArabicBitmapReceiptPreviewWithNodeCanvas(
+    outputPath,
+    arabicReceiptPayload
+  );
+
+  console.log(
+    `Saved ${rendered.widthDots}x${rendered.heightDots} bitmap preview at ${rendered.printerDpi} DPI to ${outputPath}`
+  );
+}
+
 function listInstalledSystemPrinters(): void {
   const printers = listSystemPrinters();
 
@@ -214,6 +249,8 @@ function printUsage(): void {
   console.log("  npm run print-arabic-text-system");
   console.log("  npm run print-arabic-raw-system");
   console.log("  npm run print-arabic-bitmap-system");
+  console.log("  npm run print-arabic-canvas-system");
+  console.log("  npm run render-arabic-canvas-bitmap");
   console.log("  npm run list-system-printers");
   console.log("  npm run list-usb");
   console.log("  npm run inspect-printer");

@@ -14,6 +14,8 @@
     "print-arabic-text-system": "node dist/index.js print-arabic-text-system",
     "print-arabic-raw-system": "node dist/index.js print-arabic-raw-system",
     "print-arabic-bitmap-system": "node dist/index.js print-arabic-bitmap-system",
+    "print-arabic-canvas-system": "node dist/index.js print-arabic-canvas-system",
+    "render-arabic-canvas-bitmap": "node dist/index.js render-arabic-canvas-bitmap",
     "list-system-printers": "node dist/index.js list-system-printers",
     "list-usb": "node dist/index.js list-usb",
     "inspect-printer": "node dist/index.js inspect-printer",
@@ -28,6 +30,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "canvas": "^3.2.3",
     "iconv-lite": "0.6.3",
     "node-thermal-printer": "^4.6.0",
     "usb": "^2.15.0"

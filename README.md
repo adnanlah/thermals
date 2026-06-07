@@ -32,6 +32,8 @@ corepack yarn print-arabic-system
 corepack yarn print-arabic-text-system
 corepack yarn print-arabic-raw-system
 corepack yarn print-arabic-bitmap-system
+corepack yarn print-arabic-canvas-system
+corepack yarn render-arabic-canvas-bitmap
 ```
 
 `list-usb` prints connected USB device descriptors so you can confirm the VID/PID visible to Node.
@@ -73,9 +75,11 @@ Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows sp
 
 `print-arabic-system` is the recommended Arabic path. It renders Arabic with Windows text shaping into a raster image and sends that image as ESC/POS, so it does not depend on the printer's Arabic code page support. `print-arabic-bitmap-system` is kept as an explicit alias for the same bitmap approach.
 
+`print-arabic-canvas-system` is an alternate Arabic bitmap path that renders the receipt with `node-canvas` instead of PowerShell/System.Drawing. It still sends RAW ESC/POS raster bytes to the Windows printer, so Windows does not rescale a PNG/JPEG before printing. `render-arabic-canvas-bitmap` writes a preview PNG to `dist/arabic-receipt-node-canvas.png` without printing.
+
 `print-arabic-text-system` and `print-arabic-raw-system` are diagnostic text-mode paths. They are useful for testing printer firmware code pages, but many low-cost thermal printers print Arabic text bytes as mojibake or Chinese-looking glyphs.
 
-The bitmap Arabic path is controlled by `arabicBitmapPrinterConfig` in `src/config.ts`. Set `feedAfterReceiptLines` for the paper feed after the thank-you message. Keep `cutAfterPrint` false for printers without a supported cutter.
+The bitmap Arabic paths are controlled by `arabicBitmapPrinterConfig` in `src/config.ts`. `widthDots` must match the real thermal head width, commonly `576` for 80 mm and `384` for 58 mm printers. The node-canvas path renders internally at `widthDots * renderScale` using 32-bit RGB/RGBA canvas pixels, then downsamples to the printer's final 1-bit ESC/POS raster using `monochromeThreshold`; this avoids the low-quality result you get when Windows or a printer driver scales an ordinary image. `printerDpi` is written into the preview PNG metadata and should usually stay at `203`. Set `feedAfterReceiptLines` for the paper feed after the thank-you message. Keep `cutAfterPrint` false for printers without a supported cutter.
 
 Arabic receipt items support unit names and optional line discounts:
 

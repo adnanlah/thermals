@@ -27,6 +27,10 @@ export type SystemPrinterConfig = {
 
 export type ArabicBitmapPrinterConfig = {
   widthDots: number;
+  printerDpi: number;
+  renderScale: number;
+  monochromeThreshold: number;
+  fontFamily: string;
   feedAfterReceiptLines: number;
   cutAfterPrint: boolean;
 };
@@ -65,6 +69,13 @@ export const systemPrinterConfig: SystemPrinterConfig = {
 export const arabicBitmapPrinterConfig: ArabicBitmapPrinterConfig = {
   // 80 mm thermal printers are commonly 576 dots wide. Use 384 for 58 mm.
   widthDots: 576,
+  // Most ESC/POS thermal heads are 203 DPI. This is used for PNG preview metadata.
+  printerDpi: 203,
+  // Render text larger, then downsample to printer dots before 1-bit conversion.
+  renderScale: 3,
+  // Luma threshold for converting RGBA text to the printer's 1-bit raster format.
+  monochromeThreshold: 235,
+  fontFamily: "Tahoma",
   // Extra paper feed after the final thank-you message.
   feedAfterReceiptLines: 5,
   // Enable only for printers with a supported cutter.
