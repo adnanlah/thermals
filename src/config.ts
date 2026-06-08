@@ -73,8 +73,8 @@ export const arabicBitmapPrinterConfig: ArabicBitmapPrinterConfig = {
   printerDpi: 203,
   // Render text larger, then downsample to printer dots before 1-bit conversion.
   renderScale: 3,
-  // Luma threshold for converting RGBA text to the printer's 1-bit raster format.
-  monochromeThreshold: 235,
+  // Lower thresholds keep antialiased Arabic counters from filling in.
+  monochromeThreshold: 178,
   fontFamily: "Tahoma",
   // Extra paper feed after the final thank-you message.
   feedAfterReceiptLines: 5,

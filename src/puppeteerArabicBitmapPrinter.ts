@@ -170,6 +170,10 @@ async function renderReceiptScreenshot(
       omitBackground: false
     });
 
+    // TODO: save buffer to file
+    console.log(`writing screenshot` )
+    await writeFile(`dist/screenshot-${new Date().getTime()}.png`, Buffer.from(screenshot));
+
     return {
       pngBuffer: Buffer.from(screenshot),
       cssHeightDots
@@ -332,7 +336,7 @@ function createReceiptStyles(
       width: ${config.widthDots}px;
       background: #fff;
       color: #000;
-      font-family: ${cssFontFamily(PUPPETEER_FONT_FAMILY)}, Arial, sans-serif;
+      font-family: Arial, sans-serif;
       text-rendering: geometricPrecision;
       -webkit-font-smoothing: antialiased;
     }
@@ -354,7 +358,7 @@ function createReceiptStyles(
     .store-name {
       margin: 0 0 4px;
       font-size: 32px;
-      font-weight: 800;
+      font-weight: 700;
       line-height: 1.1;
     }
 
@@ -464,7 +468,7 @@ function createReceiptStyles(
     .total {
       margin-top: 2px;
       font-size: 28px;
-      font-weight: 800;
+      font-weight: 700;
     }
 
     .paid {
@@ -477,7 +481,7 @@ function createReceiptStyles(
       margin-top: 34px;
       text-align: center;
       font-size: 26px;
-      font-weight: 800;
+      font-weight: 700;
     }
   `;
 }
@@ -526,13 +530,22 @@ function getPuppeteerFontFaceCss(): string {
 
   cachedFontFaceCss = `
     @font-face {
-      font-family: ${cssFontFamily(PUPPETEER_FONT_FAMILY)};
-      src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
+      font-family: Tahoma;
       font-weight: 400 800;
       font-style: normal;
       font-display: block;
     }
   `;
+
+  // cachedFontFaceCss = `
+  //   @font-face {
+  //     font-family: ${cssFontFamily(PUPPETEER_FONT_FAMILY)};
+  //     src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
+  //     font-weight: 400 800;
+  //     font-style: normal;
+  //     font-display: block;
+  //   }
+  // `;
 
   return cachedFontFaceCss;
 }
