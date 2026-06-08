@@ -41,6 +41,7 @@ type TableColumn = {
   title: string;
   widthRatio: number;
   align: TextAlign;
+  headerAlign?: TextAlign;
 };
 
 type TableCell = {
@@ -101,6 +102,7 @@ const BARCODE_BAR_HEIGHT_DOTS = 54;
 const BARCODE_TOP_MARGIN_DOTS = 50;
 const BARCODE_LABEL_GAP_DOTS = 12;
 const BARCODE_BOTTOM_MARGIN_DOTS = 50;
+const THANK_YOU_BOTTOM_MARGIN_DOTS = 150;
 const BARCODE_MAX_WIDTH_DOTS = 420;
 const BARCODE_QUIET_ZONE_DOTS = 16;
 const CURRENCY_LABEL = "\u062f.\u062c";
@@ -113,10 +115,10 @@ const MONEY_TEXT_PATTERN = new RegExp(
 let isNotoNaskhRegistered = false;
 
 const itemTableColumns: TableColumn[] = [
-  { title: "الصنف", widthRatio: 0.34, align: "right" },
-  { title: "الكمية", widthRatio: 0.2, align: "right" },
-  { title: "السعر", widthRatio: 0.23, align: "left" },
-  { title: "الإجمالي", widthRatio: 0.23, align: "left" }
+  { title: "الصنف", widthRatio: 0.34, align: "right", headerAlign: "right" },
+  { title: "الكمية", widthRatio: 0.2, align: "right", headerAlign: "right" },
+  { title: "السعر", widthRatio: 0.23, align: "right", headerAlign: "right" },
+  { title: "الإجمالي", widthRatio: 0.23, align: "left", headerAlign: "right" }
 ];
 
 export function createArabicBitmapReceiptWithNodeCanvas(
@@ -263,7 +265,7 @@ function createNodeCanvasReceiptLayout(
         cells: [
           { text: item.name, align: "right" },
           { text: `${item.quantity} ${item.unitName}`, align: "right" },
-          { text: formatArabicMoney(item.unitPrice), align: "left", direction: "ltr" },
+          { text: formatArabicMoney(item.unitPrice), align: "right", direction: "ltr" },
           { text: formatArabicMoney(line.grossTotal), align: "left", direction: "ltr" }
         ]
       }
@@ -379,7 +381,7 @@ function measureReceiptHeight(
   y += BARCODE_TOP_MARGIN_DOTS;
   y += measureBarcodeBlock(context, layout.receipt.orderNumber, config);
   y += BARCODE_BOTTOM_MARGIN_DOTS;
-  y += measureTextBlock(context, "شكرا لزيارتكم", centeredStyle(26, config, 700), contentWidth) + 12;
+  y += measureTextBlock(context, "شكرا لزيارتكم", centeredStyle(26, config, 700), contentWidth) + THANK_YOU_BOTTOM_MARGIN_DOTS;
 
   return Math.max(1, Math.ceil(y + 12));
 }
@@ -1005,7 +1007,7 @@ function headerRow(columns: TableColumn[]): TableRow {
     bottomPadding: 4,
     cells: columns.map((column) => ({
       text: column.title,
-      align: column.align,
+      align: column.headerAlign ?? column.align,
       weight: 700
     }))
   };

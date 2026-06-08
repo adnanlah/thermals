@@ -32,7 +32,7 @@ export type ArabicReceipt = {
 export const arabicReceiptPayload: ArabicReceipt = {
   storeName: "متجر الطابعة الحرارية",
   storeAddress: "شارع التجربة 123",
-  cashier: "أمينة",
+  cashier: "عدنان",
   orderNumber: "AR-10042",
   taxRate: 0.07,
   globalDiscount: { type: "fixed", value: 100 },
@@ -42,17 +42,20 @@ export const arabicReceiptPayload: ArabicReceipt = {
       name: "قهوة",
       quantity: 2,
       unitName: "كوب",
-      unitPrice: 250,
+      unitPrice: 123250,
       discount: { type: "percent", value: 10 }
     },
     {
       name: "كرواسون",
       quantity: 1,
       unitName: "قطعة",
-      unitPrice: 325,
+      unitPrice: 72305,
       discount: { type: "fixed", value: 25 }
     },
-    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 599 }
+    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
+    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
+    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
+    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
   ]
 };
 

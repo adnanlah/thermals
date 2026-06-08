@@ -74,9 +74,9 @@ export const arabicBitmapPrinterConfig: ArabicBitmapPrinterConfig = {
   // Render text larger, then downsample to printer dots before 1-bit conversion.
   renderScale: 3,
   // Balanced for Noto Arabic bitmap receipts: dark enough without filling counters.
-  monochromeThreshold: 240,
+  monochromeThreshold: 230,
   // Use "Arial" if you want to compare against the bundled Noto Naskh Arabic font.
-  fontFamily: "Noto Naskh Arabic",
+  fontFamily: "Arial",
   // Extra paper feed after the final thank-you message.
   feedAfterReceiptLines: 5,
   // Enable only for printers with a supported cutter.
