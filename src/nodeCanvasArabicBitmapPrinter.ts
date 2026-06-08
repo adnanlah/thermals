@@ -63,6 +63,10 @@ type SummaryRow = {
   bold?: boolean;
 };
 
+type MoneyTextParts = {
+  amount: string;
+};
+
 export type NodeCanvasArabicBitmapReceipt = {
   escposBuffer: Buffer;
   pngBuffer: Buffer;
@@ -88,6 +92,12 @@ const BARCODE_BAR_HEIGHT_DOTS = 54;
 const BARCODE_LABEL_GAP_DOTS = 4;
 const BARCODE_MAX_WIDTH_DOTS = 420;
 const BARCODE_QUIET_ZONE_DOTS = 16;
+const CURRENCY_LABEL = "\u062f.\u062c";
+const CURRENCY_GLYPHS_IN_RTL_VISUAL_ORDER = ["\u062c", ".", "\u062f"] as const;
+const MONEY_TEXT_PATTERN = new RegExp(
+  `^(-?\\d+(?:\\.\\d+)?)\\s+${escapeRegExp(CURRENCY_LABEL)}$`,
+  "u"
+);
 let isNotoNaskhRegistered = false;
 
 const itemTableColumns: TableColumn[] = [
@@ -674,6 +684,13 @@ function drawTextBlock(
   y: number,
   width: number
 ): number {
+  const moneyParts = parseMoneyText(text);
+
+  if (moneyParts) {
+    drawMoneyLine(context, moneyParts, style, x, y, width);
+    return y + getLineHeight(style.size);
+  }
+
   const lines = wrapText(text, context, style, width);
   const lineHeight = getLineHeight(style.size);
   let cursorY = y;
@@ -694,6 +711,10 @@ function measureTextBlock(
   style: TextStyle,
   width: number
 ): number {
+  if (parseMoneyText(text)) {
+    return getLineHeight(style.size);
+  }
+
   return wrapText(text, context, style, width).length * getLineHeight(style.size);
 }
 
@@ -711,6 +732,83 @@ function drawSingleLine(
   context.textBaseline = "top";
   context.fillStyle = "black";
   context.fillText(text, x, y);
+}
+
+function drawMoneyLine(
+  context: CanvasRenderingContext2D,
+  money: MoneyTextParts,
+  style: TextStyle,
+  x: number,
+  y: number,
+  width: number
+): void {
+  context.font = createFont(style);
+  context.textAlign = "left";
+  context.direction = "ltr";
+  context.lang = "ar-DZ";
+  context.textBaseline = "top";
+  context.fillStyle = "black";
+
+  // Money mixes ASCII digits with Arabic letters. Drawing the runs separately
+  // gives us RTL reading order: amount first on the right, currency after it
+  // on the left, without Canvas moving the Arabic abbreviation around.
+  const amountWidth = context.measureText(money.amount).width;
+  const gapWidth = getMoneyGapWidth(style);
+  const currencyWidth = measureCurrencyLabel(context);
+  const lineWidth = amountWidth + gapWidth + currencyWidth;
+  const startX = getAlignedInlineStartX(style.align, x, width, lineWidth);
+
+  drawCurrencyLabel(context, startX, y);
+  context.fillText(money.amount, startX + currencyWidth + gapWidth, y);
+}
+
+function drawCurrencyLabel(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number
+): void {
+  let cursorX = x;
+
+  // The whole money value is read RTL: amount first, then currency to its left.
+  // Drawing these glyphs left-to-right as ج.د makes the RTL reading order د.ج.
+  for (const glyph of CURRENCY_GLYPHS_IN_RTL_VISUAL_ORDER) {
+    context.fillText(glyph, cursorX, y);
+    cursorX += context.measureText(glyph).width;
+  }
+}
+
+function measureCurrencyLabel(context: CanvasRenderingContext2D): number {
+  return CURRENCY_GLYPHS_IN_RTL_VISUAL_ORDER.reduce(
+    (width, glyph) => width + context.measureText(glyph).width,
+    0
+  );
+}
+
+function getMoneyGapWidth(style: TextStyle): number {
+  return Math.max(6, Math.round(style.size * 0.35));
+}
+
+function getAlignedInlineStartX(
+  align: TextAlign,
+  x: number,
+  width: number,
+  lineWidth: number
+): number {
+  if (align === "right") {
+    return x + width - lineWidth;
+  }
+
+  if (align === "center") {
+    return x + (width - lineWidth) / 2;
+  }
+
+  return x;
+}
+
+function parseMoneyText(text: string): MoneyTextParts | undefined {
+  const match = MONEY_TEXT_PATTERN.exec(text);
+
+  return match ? { amount: match[1] } : undefined;
 }
 
 function wrapText(
@@ -1065,11 +1163,11 @@ function formatDiscountLabel(discount: ReceiptDiscount): string {
     return formatDiscountValue(discount);
   }
 
-  return formatArabicMoney(discount.value);
+  return "\u062b\u0627\u0628\u062a";
 }
 
 function formatArabicMoney(value: number): string {
-  return `${roundMoney(value).toFixed(2)} دج`;
+  return `${roundMoney(value).toFixed(2)} ${CURRENCY_LABEL}`;
 }
 
 function formatArabicDate(date: Date): string {
@@ -1084,4 +1182,8 @@ function formatArabicDate(date: Date): string {
 
 function isMostlyArabic(text: string): boolean {
   return /[\u0600-\u06ff]/u.test(text);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
