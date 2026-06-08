@@ -79,13 +79,17 @@ Important: `node-thermal-printer` sends RAW ESC/POS bytes through the Windows sp
 
 `print-arabic-canvas-system` is an alternate Arabic bitmap path that renders the receipt with `node-canvas` instead of PowerShell/System.Drawing. It embeds `src/assets/NotoNaskhArabic-VariableFont_wght.ttf`, draws invoice items as a table, draws global receipt values as opposed label/value rows, and adds a Code 128 barcode from the receipt id before converting to RAW ESC/POS raster bytes. `render-arabic-canvas-bitmap` writes a preview PNG to `dist/arabic-receipt-node-canvas.png` without printing.
 
-The node-canvas helpers accept an optional options object as their last argument. Use `paymentMethod: null` to hide the payment-method line, or pass a string to override the receipt payload's `paidWith` value:
+The node-canvas helpers accept an optional options object as their last argument. Use `paymentMethod: null` to hide the payment-method line, pass a string to override the receipt payload's `paidWith` value, pass `thankYouMessage` to override the receipt footer text, or pass `printedByMessage` to override the final printed-by line:
 
 ```ts
 createArabicBitmapReceiptWithNodeCanvas(receipt, bitmapConfig, {
-  paymentMethod: null
+  paymentMethod: null,
+  thankYouMessage: "شكرا لتعاملكم معنا",
+  printedByMessage: "طبع بواسطة: عدنان"
 });
 ```
+
+The Arabic receipt payload can include `storePhones`, `storeEmail`, `clientName`, `cashierPostNumber`, `thankYouMessage`, and `printedByMessage`. The node-canvas receipt prints the summed item quantity inside the `الصنف` table header.
 
 `print-arabic-puppeteer-system` is another Arabic bitmap path that renders an HTML/CSS receipt in Puppeteer, screenshots the receipt element at the configured supersampling scale, and then uses the same final 1-bit ESC/POS raster conversion. It embeds `src/assets/NotoNaskhArabic-VariableFont_wght.ttf` into the generated HTML so Arabic text rendering is consistent. `render-arabic-puppeteer-bitmap` writes the final monochrome preview to `dist/arabic-receipt-puppeteer.png`.
 

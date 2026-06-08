@@ -21,22 +21,34 @@ export type ArabicReceiptLineItem = {
 export type ArabicReceipt = {
   storeName: string;
   storeAddress: string;
+  storePhones?: string[];
+  storeEmail?: string;
+  clientName?: string;
   cashier: string;
+  cashierPostNumber?: string;
   orderNumber: string;
   items: ArabicReceiptLineItem[];
   taxRate: number;
   globalDiscount?: ReceiptDiscount;
   paidWith: string;
+  thankYouMessage?: string;
+  printedByMessage?: string;
 };
 
 export const arabicReceiptPayload: ArabicReceipt = {
   storeName: "متجر الطابعة الحرارية",
   storeAddress: "شارع التجربة 123",
+  storePhones: ["0555112233", "0666445566"],
+  storeEmail: "contact@example.com",
+  clientName: "زبون نقدي",
   cashier: "عدنان",
+  cashierPostNumber: "POS-01",
   orderNumber: "AR-10042",
   taxRate: 0.07,
   globalDiscount: { type: "fixed", value: 100 },
   paidWith: "بطاقة بنكية",
+  thankYouMessage: "شكرا لزيارتكم",
+  printedByMessage: "طبع بواسطة: www.steppe.info",
   items: [
     {
       name: "قهوة",

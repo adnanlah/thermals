@@ -62,6 +62,7 @@ type SummaryRow = {
   label: string;
   value: string;
   bold?: boolean;
+  dividerBefore?: boolean;
 };
 
 type MoneyTextParts = {
@@ -74,6 +75,8 @@ export type NodeCanvasArabicBitmapReceiptOptions = {
    * hide the payment-method line, or pass a string to override the receipt value.
    */
   paymentMethod?: string | null;
+  thankYouMessage?: string | null;
+  printedByMessage?: string | null;
 };
 
 export type NodeCanvasArabicBitmapReceipt = {
@@ -108,18 +111,28 @@ const BARCODE_QUIET_ZONE_DOTS = 16;
 const CURRENCY_LABEL = "\u062f.\u062c";
 const CURRENCY_GLYPHS_IN_RTL_VISUAL_ORDER = ["\u062c", ".", "\u062f"] as const;
 const PAYMENT_METHOD_LABEL = "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639:";
+const DEFAULT_THANK_YOU_MESSAGE = "\u0634\u0643\u0631\u0627 \u0644\u0632\u064a\u0627\u0631\u062a\u0643\u0645";
+const PRINTED_BY_TOP_MARGIN_DOTS = 8;
+const PRINTED_BY_BOTTOM_MARGIN_DOTS = 12;
 const MONEY_TEXT_PATTERN = new RegExp(
   `^(-?\\d+(?:\\.\\d+)?)\\s+${escapeRegExp(CURRENCY_LABEL)}$`,
   "u"
 );
 let isNotoNaskhRegistered = false;
 
-const itemTableColumns: TableColumn[] = [
-  { title: "الصنف", widthRatio: 0.34, align: "right", headerAlign: "right" },
-  { title: "الكمية", widthRatio: 0.2, align: "right", headerAlign: "right" },
-  { title: "السعر", widthRatio: 0.23, align: "right", headerAlign: "right" },
-  { title: "الإجمالي", widthRatio: 0.23, align: "left", headerAlign: "right" }
-];
+function createItemTableColumns(receipt: ArabicReceipt): TableColumn[] {
+  return [
+    {
+      title: `الصنف (${formatQuantity(getReceiptItemCount(receipt))})`,
+      widthRatio: 0.34,
+      align: "right",
+      headerAlign: "right"
+    },
+    { title: "الكمية", widthRatio: 0.2, align: "right", headerAlign: "right" },
+    { title: "السعر", widthRatio: 0.23, align: "right", headerAlign: "right" },
+    { title: "الإجمالي", widthRatio: 0.23, align: "left", headerAlign: "right" }
+  ];
+}
 
 export function createArabicBitmapReceiptWithNodeCanvas(
   receipt: ArabicReceipt,
@@ -247,6 +260,10 @@ function createNodeCanvasReceiptLayout(
 ): {
   receipt: ArabicReceipt;
   paymentMethod?: string;
+  thankYouMessage: string;
+  printedByMessage?: string;
+  storeContactLines: string[];
+  tableColumns: TableColumn[];
   itemRows: TableRow[];
   summaryRows: SummaryRow[];
 } {
@@ -340,13 +357,18 @@ function createNodeCanvasReceiptLayout(
     {
       label: "الإجمالي:",
       value: formatArabicMoney(totals.total),
-      bold: true
+      bold: true,
+      dividerBefore: true
     }
   );
 
   return {
     receipt,
     paymentMethod: resolvePaymentMethod(receipt, options),
+    thankYouMessage: resolveThankYouMessage(receipt, options),
+    printedByMessage: resolvePrintedByMessage(receipt, options),
+    storeContactLines: getStoreContactLines(receipt),
+    tableColumns: createItemTableColumns(receipt),
     itemRows,
     summaryRows
   };
@@ -362,10 +384,11 @@ function measureReceiptHeight(
 
   y += measureTextBlock(context, layout.receipt.storeName, titleStyle(config), contentWidth) + 8;
   y += measureTextBlock(context, layout.receipt.storeAddress, centeredStyle(23, config), contentWidth) + 4;
+  y += measureStoreContactLines(context, layout.storeContactLines, config);
   y += measureTextBlock(context, formatArabicDate(new Date()), centeredStyle(22, config), contentWidth) + ORDER_SECTION_TOP_MARGIN_DOTS;
   y += measureOrderRow(context, layout.receipt, config) + 10;
   y += 10;
-  y += measureTable(context, layout.itemRows, itemTableColumns, config, true);
+  y += measureTable(context, layout.itemRows, layout.tableColumns, config, true);
   y += 12;
   y += measureSummaryTable(context, layout.summaryRows, config);
 
@@ -381,7 +404,19 @@ function measureReceiptHeight(
   y += BARCODE_TOP_MARGIN_DOTS;
   y += measureBarcodeBlock(context, layout.receipt.orderNumber, config);
   y += BARCODE_BOTTOM_MARGIN_DOTS;
-  y += measureTextBlock(context, "شكرا لزيارتكم", centeredStyle(26, config, 700), contentWidth) + THANK_YOU_BOTTOM_MARGIN_DOTS;
+  y += measureTextBlock(context, layout.thankYouMessage, centeredStyle(26, config, 700), contentWidth) + THANK_YOU_BOTTOM_MARGIN_DOTS;
+
+  if (layout.printedByMessage) {
+    y +=
+      PRINTED_BY_TOP_MARGIN_DOTS +
+      measureTextBlock(
+        context,
+        layout.printedByMessage,
+        centeredStyle(18, config),
+        contentWidth
+      ) +
+      PRINTED_BY_BOTTOM_MARGIN_DOTS;
+  }
 
   return Math.max(1, Math.ceil(y + 12));
 }
@@ -400,10 +435,11 @@ function renderReceipt(
 
   y = drawTextBlock(context, layout.receipt.storeName, titleStyle(config), PAGE_PADDING_DOTS, y + 8, contentWidth) + 8;
   y = drawTextBlock(context, layout.receipt.storeAddress, centeredStyle(23, config), PAGE_PADDING_DOTS, y, contentWidth) + 4;
+  y = drawStoreContactLines(context, layout.storeContactLines, config, y);
   y = drawTextBlock(context, formatArabicDate(new Date()), centeredStyle(22, config), PAGE_PADDING_DOTS, y, contentWidth) + ORDER_SECTION_TOP_MARGIN_DOTS;
   y = drawOrderRow(context, layout.receipt, config, y) + 10;
   y = drawRule(context, config, y) + 8;
-  y = drawTable(context, layout.itemRows, itemTableColumns, config, y, true);
+  y = drawTable(context, layout.itemRows, layout.tableColumns, config, y, true);
   y = drawRule(context, config, y + 4) + 8;
   y = drawSummaryTable(context, layout.summaryRows, config, y) + 8;
 
@@ -421,14 +457,26 @@ function renderReceipt(
   y += BARCODE_TOP_MARGIN_DOTS;
   y = drawBarcodeBlock(context, layout.receipt.orderNumber, config, y);
   y += BARCODE_BOTTOM_MARGIN_DOTS;
-  drawTextBlock(
+  y = drawTextBlock(
     context,
-    "شكرا لزيارتكم",
+    layout.thankYouMessage,
     centeredStyle(26, config, 700),
     PAGE_PADDING_DOTS,
     y,
     contentWidth
   );
+
+  if (layout.printedByMessage) {
+    y += THANK_YOU_BOTTOM_MARGIN_DOTS + PRINTED_BY_TOP_MARGIN_DOTS;
+    drawTextBlock(
+      context,
+      layout.printedByMessage,
+      centeredStyle(18, config),
+      PAGE_PADDING_DOTS,
+      y,
+      contentWidth
+    );
+  }
 }
 
 function drawOrderRow(
@@ -438,27 +486,33 @@ function drawOrderRow(
   y: number
 ): number {
   const style = rightStyle(22, 400, config);
-  const rowHeight = Math.max(
-    measureTextBlock(context, `رقم الطلب: ${receipt.orderNumber}`, style, getContentWidth(config) / 2),
-    measureTextBlock(context, `الكاشير: ${receipt.cashier}`, style, getContentWidth(config) / 2)
-  );
+  let cursorY = y;
 
-  drawSingleLine(
+  cursorY = drawTwoColumnMetadataRow(
     context,
-    `رقم الطلب: ${receipt.orderNumber}`,
     style,
-    config.widthDots - PAGE_PADDING_DOTS,
-    y
-  );
-  drawSingleLine(
-    context,
-    `الكاشير: ${receipt.cashier}`,
-    { ...style, align: "left" },
-    PAGE_PADDING_DOTS,
-    y
+    formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628", receipt.orderNumber),
+    formatMetadataLine("\u0627\u0644\u0643\u0627\u0634\u064a\u0631", receipt.cashier),
+    config,
+    cursorY
   );
 
-  return y + rowHeight;
+  if (receipt.clientName || receipt.cashierPostNumber) {
+    cursorY = drawTwoColumnMetadataRow(
+      context,
+      style,
+      receipt.clientName
+        ? formatMetadataLine("\u0627\u0644\u0639\u0645\u064a\u0644", receipt.clientName)
+        : "",
+      receipt.cashierPostNumber
+        ? formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0645\u0646\u0635\u0628", receipt.cashierPostNumber)
+        : "",
+      config,
+      cursorY + 2
+    );
+  }
+
+  return cursorY;
 }
 
 function measureOrderRow(
@@ -468,10 +522,125 @@ function measureOrderRow(
 ): number {
   const style = rightStyle(22, 400, config);
   const halfWidth = getContentWidth(config) / 2;
+  let height = measureTwoColumnMetadataRow(
+    context,
+    style,
+    formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628", receipt.orderNumber),
+    formatMetadataLine("\u0627\u0644\u0643\u0627\u0634\u064a\u0631", receipt.cashier),
+    halfWidth
+  );
 
+  if (receipt.clientName || receipt.cashierPostNumber) {
+    height +=
+      2 +
+      measureTwoColumnMetadataRow(
+        context,
+        style,
+        receipt.clientName
+          ? formatMetadataLine("\u0627\u0644\u0639\u0645\u064a\u0644", receipt.clientName)
+          : "",
+        receipt.cashierPostNumber
+          ? formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0645\u0646\u0635\u0628", receipt.cashierPostNumber)
+          : "",
+        halfWidth
+      );
+  }
+
+  return height;
+}
+
+function drawTwoColumnMetadataRow(
+  context: CanvasRenderingContext2D,
+  style: TextStyle,
+  rightText: string,
+  leftText: string,
+  config: NormalizedArabicBitmapPrinterConfig,
+  y: number
+): number {
+  const halfWidth = getContentWidth(config) / 2;
+  const rightHeight = rightText
+    ? drawTextBlock(
+        context,
+        rightText,
+        style,
+        config.widthDots - PAGE_PADDING_DOTS - halfWidth,
+        y,
+        halfWidth
+      )
+    : y;
+  const leftHeight = leftText
+    ? drawTextBlock(
+        context,
+        leftText,
+        { ...style, align: "left" },
+        PAGE_PADDING_DOTS,
+        y,
+        halfWidth
+      )
+    : y;
+
+  return Math.max(rightHeight, leftHeight);
+}
+
+function measureTwoColumnMetadataRow(
+  context: CanvasRenderingContext2D,
+  style: TextStyle,
+  rightText: string,
+  leftText: string,
+  halfWidth: number
+): number {
   return Math.max(
-    measureTextBlock(context, `رقم الطلب: ${receipt.orderNumber}`, style, halfWidth),
-    measureTextBlock(context, `الكاشير: ${receipt.cashier}`, style, halfWidth)
+    rightText ? measureTextBlock(context, rightText, style, halfWidth) : 0,
+    leftText
+      ? measureTextBlock(context, leftText, { ...style, align: "left" }, halfWidth)
+      : 0
+  );
+}
+
+function drawStoreContactLines(
+  context: CanvasRenderingContext2D,
+  lines: string[],
+  config: NormalizedArabicBitmapPrinterConfig,
+  y: number
+): number {
+  if (lines.length === 0) {
+    return y;
+  }
+
+  const style = centeredStyle(19, config);
+  let cursorY = y;
+
+  for (const line of lines) {
+    cursorY = drawTextBlock(
+      context,
+      line,
+      style,
+      PAGE_PADDING_DOTS,
+      cursorY,
+      getContentWidth(config)
+    ) + 2;
+  }
+
+  return cursorY + 2;
+}
+
+function measureStoreContactLines(
+  context: CanvasRenderingContext2D,
+  lines: string[],
+  config: NormalizedArabicBitmapPrinterConfig
+): number {
+  if (lines.length === 0) {
+    return 0;
+  }
+
+  const style = centeredStyle(19, config);
+
+  return (
+    lines.reduce(
+      (height, line) =>
+        height + measureTextBlock(context, line, style, getContentWidth(config)) + 2,
+      0
+    ) + 2
   );
 }
 
@@ -673,6 +842,10 @@ function drawSummaryTable(
   const valueWidth = getContentWidth(config) - labelWidth;
 
   for (const row of rows) {
+    if (row.dividerBefore) {
+      cursorY = drawRule(context, config, cursorY + 4) + 6;
+    }
+
     const size = row.bold ? 28 : 23;
     const weight = row.bold ? 700 : 400;
     const labelHeight = measureTextBlock(context, row.label, rightStyle(size, weight, config), labelWidth);
@@ -712,9 +885,11 @@ function measureSummaryTable(
   return rows.reduce((height, row) => {
     const size = row.bold ? 28 : 23;
     const weight = row.bold ? 700 : 400;
+    const dividerHeight = row.dividerBefore ? 11 : 0;
 
     return (
       height +
+      dividerHeight +
       Math.max(
         measureTextBlock(context, row.label, rightStyle(size, weight, config), labelWidth),
         measureTextBlock(context, row.value, moneyStyle(size, weight, config), valueWidth)
@@ -1226,6 +1401,62 @@ function resolvePaymentMethod(
     : receipt.paidWith;
 
   return normalizeOptionalText(sourceValue);
+}
+
+function resolveThankYouMessage(
+  receipt: ArabicReceipt,
+  options: NodeCanvasArabicBitmapReceiptOptions
+): string {
+  const sourceValue = Object.prototype.hasOwnProperty.call(
+    options,
+    "thankYouMessage"
+  )
+    ? options.thankYouMessage
+    : receipt.thankYouMessage;
+
+  return normalizeOptionalText(sourceValue) ?? DEFAULT_THANK_YOU_MESSAGE;
+}
+
+function resolvePrintedByMessage(
+  receipt: ArabicReceipt,
+  options: NodeCanvasArabicBitmapReceiptOptions
+): string | undefined {
+  const sourceValue = Object.prototype.hasOwnProperty.call(
+    options,
+    "printedByMessage"
+  )
+    ? options.printedByMessage
+    : receipt.printedByMessage;
+
+  return normalizeOptionalText(sourceValue);
+}
+
+function getStoreContactLines(receipt: ArabicReceipt): string[] {
+  const phones = receipt.storePhones?.map((phone) => phone.trim()).filter(Boolean) ?? [];
+  const email = normalizeOptionalText(receipt.storeEmail);
+  const lines: string[] = [];
+
+  if (phones.length > 0) {
+    lines.push(`هاتف: ${phones.join(" / ")}`);
+  }
+
+  if (email) {
+    lines.push(`البريد: ${email}`);
+  }
+
+  return lines;
+}
+
+function formatMetadataLine(label: string, value: string): string {
+  return `${label}: ${value}`;
+}
+
+function getReceiptItemCount(receipt: ArabicReceipt): number {
+  return receipt.items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function formatQuantity(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value);
 }
 
 function normalizeOptionalText(value: string | null | undefined): string | undefined {
