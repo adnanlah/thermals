@@ -67,6 +67,14 @@ type MoneyTextParts = {
   amount: string;
 };
 
+export type NodeCanvasArabicBitmapReceiptOptions = {
+  /**
+   * Defaults to receipt.paidWith when omitted. Pass null or an empty string to
+   * hide the payment-method line, or pass a string to override the receipt value.
+   */
+  paymentMethod?: string | null;
+};
+
 export type NodeCanvasArabicBitmapReceipt = {
   escposBuffer: Buffer;
   pngBuffer: Buffer;
@@ -88,12 +96,16 @@ const PAGE_PADDING_DOTS = 8;
 const CELL_PADDING_X_DOTS = 4;
 const CELL_PADDING_Y_DOTS = 2;
 const LINE_HEIGHT_MULTIPLIER = 1.22;
+const ORDER_SECTION_TOP_MARGIN_DOTS = 50;
 const BARCODE_BAR_HEIGHT_DOTS = 54;
-const BARCODE_LABEL_GAP_DOTS = 4;
+const BARCODE_TOP_MARGIN_DOTS = 50;
+const BARCODE_LABEL_GAP_DOTS = 12;
+const BARCODE_BOTTOM_MARGIN_DOTS = 50;
 const BARCODE_MAX_WIDTH_DOTS = 420;
 const BARCODE_QUIET_ZONE_DOTS = 16;
 const CURRENCY_LABEL = "\u062f.\u062c";
 const CURRENCY_GLYPHS_IN_RTL_VISUAL_ORDER = ["\u062c", ".", "\u062f"] as const;
+const PAYMENT_METHOD_LABEL = "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639:";
 const MONEY_TEXT_PATTERN = new RegExp(
   `^(-?\\d+(?:\\.\\d+)?)\\s+${escapeRegExp(CURRENCY_LABEL)}$`,
   "u"
@@ -109,11 +121,12 @@ const itemTableColumns: TableColumn[] = [
 
 export function createArabicBitmapReceiptWithNodeCanvas(
   receipt: ArabicReceipt,
-  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig
+  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig,
+  options: NodeCanvasArabicBitmapReceiptOptions = {}
 ): NodeCanvasArabicBitmapReceipt {
   const startedAt = new Date();
   const config = normalizeArabicBitmapPrinterConfig(bitmapConfig);
-  const layout = createNodeCanvasReceiptLayout(receipt);
+  const layout = createNodeCanvasReceiptLayout(receipt, options);
   const measuringContext = configureCanvasContext(
     createCanvas(config.widthDots, 1).getContext("2d", {
       alpha: false,
@@ -180,17 +193,27 @@ export function createArabicBitmapReceiptWithNodeCanvas(
 
 export function createArabicBitmapReceiptBufferWithNodeCanvas(
   receipt: ArabicReceipt,
-  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig
+  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig,
+  options: NodeCanvasArabicBitmapReceiptOptions = {}
 ): Buffer {
-  return createArabicBitmapReceiptWithNodeCanvas(receipt, bitmapConfig).escposBuffer;
+  return createArabicBitmapReceiptWithNodeCanvas(
+    receipt,
+    bitmapConfig,
+    options
+  ).escposBuffer;
 }
 
 export async function saveArabicBitmapReceiptPreviewWithNodeCanvas(
   outputPath: string,
   receipt: ArabicReceipt,
-  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig
+  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig,
+  options: NodeCanvasArabicBitmapReceiptOptions = {}
 ): Promise<NodeCanvasArabicBitmapReceipt> {
-  const rendered = createArabicBitmapReceiptWithNodeCanvas(receipt, bitmapConfig);
+  const rendered = createArabicBitmapReceiptWithNodeCanvas(
+    receipt,
+    bitmapConfig,
+    options
+  );
 
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, rendered.pngBuffer);
@@ -201,11 +224,13 @@ export async function saveArabicBitmapReceiptPreviewWithNodeCanvas(
 export async function printArabicBitmapReceiptWithNodeCanvas(
   receipt: ArabicReceipt,
   printerConfig: SystemPrinterConfig = systemPrinterConfig,
-  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig
+  bitmapConfig: ArabicBitmapPrinterConfig = arabicBitmapPrinterConfig,
+  options: NodeCanvasArabicBitmapReceiptOptions = {}
 ): Promise<string> {
   const buffer = createArabicBitmapReceiptBufferWithNodeCanvas(
     receipt,
-    bitmapConfig
+    bitmapConfig,
+    options
   );
 
   return printBufferWithSystemPrinter(buffer, {
@@ -214,8 +239,12 @@ export async function printArabicBitmapReceiptWithNodeCanvas(
   });
 }
 
-function createNodeCanvasReceiptLayout(receipt: ArabicReceipt): {
+function createNodeCanvasReceiptLayout(
+  receipt: ArabicReceipt,
+  options: NodeCanvasArabicBitmapReceiptOptions
+): {
   receipt: ArabicReceipt;
+  paymentMethod?: string;
   itemRows: TableRow[];
   summaryRows: SummaryRow[];
 } {
@@ -313,7 +342,12 @@ function createNodeCanvasReceiptLayout(receipt: ArabicReceipt): {
     }
   );
 
-  return { receipt, itemRows, summaryRows };
+  return {
+    receipt,
+    paymentMethod: resolvePaymentMethod(receipt, options),
+    itemRows,
+    summaryRows
+  };
 }
 
 function measureReceiptHeight(
@@ -326,19 +360,25 @@ function measureReceiptHeight(
 
   y += measureTextBlock(context, layout.receipt.storeName, titleStyle(config), contentWidth) + 8;
   y += measureTextBlock(context, layout.receipt.storeAddress, centeredStyle(23, config), contentWidth) + 4;
-  y += measureTextBlock(context, formatArabicDate(new Date()), centeredStyle(22, config), contentWidth) + 18;
+  y += measureTextBlock(context, formatArabicDate(new Date()), centeredStyle(22, config), contentWidth) + ORDER_SECTION_TOP_MARGIN_DOTS;
   y += measureOrderRow(context, layout.receipt, config) + 10;
   y += 10;
   y += measureTable(context, layout.itemRows, itemTableColumns, config, true);
   y += 12;
   y += measureSummaryTable(context, layout.summaryRows, config);
-  y += measureTextBlock(
-    context,
-    `طريقة الدفع: ${layout.receipt.paidWith}`,
-    rightStyle(24, 400, config),
-    contentWidth
-  ) + 18;
-  y += measureBarcodeBlock(context, layout.receipt.orderNumber, config) + 18;
+
+  if (layout.paymentMethod) {
+    y += measureTextBlock(
+      context,
+      formatPaymentMethodLine(layout.paymentMethod),
+      rightStyle(24, 400, config),
+      contentWidth
+    ) + 18;
+  }
+
+  y += BARCODE_TOP_MARGIN_DOTS;
+  y += measureBarcodeBlock(context, layout.receipt.orderNumber, config);
+  y += BARCODE_BOTTOM_MARGIN_DOTS;
   y += measureTextBlock(context, "شكرا لزيارتكم", centeredStyle(26, config, 700), contentWidth) + 12;
 
   return Math.max(1, Math.ceil(y + 12));
@@ -358,21 +398,27 @@ function renderReceipt(
 
   y = drawTextBlock(context, layout.receipt.storeName, titleStyle(config), PAGE_PADDING_DOTS, y + 8, contentWidth) + 8;
   y = drawTextBlock(context, layout.receipt.storeAddress, centeredStyle(23, config), PAGE_PADDING_DOTS, y, contentWidth) + 4;
-  y = drawTextBlock(context, formatArabicDate(new Date()), centeredStyle(22, config), PAGE_PADDING_DOTS, y, contentWidth) + 18;
+  y = drawTextBlock(context, formatArabicDate(new Date()), centeredStyle(22, config), PAGE_PADDING_DOTS, y, contentWidth) + ORDER_SECTION_TOP_MARGIN_DOTS;
   y = drawOrderRow(context, layout.receipt, config, y) + 10;
   y = drawRule(context, config, y) + 8;
   y = drawTable(context, layout.itemRows, itemTableColumns, config, y, true);
   y = drawRule(context, config, y + 4) + 8;
   y = drawSummaryTable(context, layout.summaryRows, config, y) + 8;
-  y = drawTextBlock(
-    context,
-    `طريقة الدفع: ${layout.receipt.paidWith}`,
-    rightStyle(24, 400, config),
-    PAGE_PADDING_DOTS,
-    y,
-    contentWidth
-  ) + 18;
-  y = drawBarcodeBlock(context, layout.receipt.orderNumber, config, y) + 18;
+
+  if (layout.paymentMethod) {
+    y = drawTextBlock(
+      context,
+      formatPaymentMethodLine(layout.paymentMethod),
+      rightStyle(24, 400, config),
+      PAGE_PADDING_DOTS,
+      y,
+      contentWidth
+    ) + 18;
+  }
+
+  y += BARCODE_TOP_MARGIN_DOTS;
+  y = drawBarcodeBlock(context, layout.receipt.orderNumber, config, y);
+  y += BARCODE_BOTTOM_MARGIN_DOTS;
   drawTextBlock(
     context,
     "شكرا لزيارتكم",
@@ -1164,6 +1210,30 @@ function formatDiscountLabel(discount: ReceiptDiscount): string {
   }
 
   return "\u062b\u0627\u0628\u062a";
+}
+
+function resolvePaymentMethod(
+  receipt: ArabicReceipt,
+  options: NodeCanvasArabicBitmapReceiptOptions
+): string | undefined {
+  const sourceValue = Object.prototype.hasOwnProperty.call(
+    options,
+    "paymentMethod"
+  )
+    ? options.paymentMethod
+    : receipt.paidWith;
+
+  return normalizeOptionalText(sourceValue);
+}
+
+function normalizeOptionalText(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+
+  return trimmed ? trimmed : undefined;
+}
+
+function formatPaymentMethodLine(paymentMethod: string): string {
+  return `${PAYMENT_METHOD_LABEL} ${paymentMethod}`;
 }
 
 function formatArabicMoney(value: number): string {
