@@ -171,8 +171,10 @@ async function renderReceiptScreenshot(
     });
 
     // TODO: save buffer to file
-    console.log(`writing screenshot` )
-    await writeFile(`dist/screenshot-${new Date().getTime()}.png`, Buffer.from(screenshot));
+    const screenshotPath = join(process.cwd(), "dist", `screenshot-${new Date().getTime()}.png`);
+    console.log(`writing screenshot`);
+    await mkdir(dirname(screenshotPath), { recursive: true });
+    await writeFile(screenshotPath, Buffer.from(screenshot));
 
     return {
       pngBuffer: Buffer.from(screenshot),
