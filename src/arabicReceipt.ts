@@ -33,6 +33,7 @@ export type ArabicReceipt = {
   paidWith: string;
   thankYouMessage?: string;
   printedByMessage?: string;
+  qrCodeUrl?: string;
 };
 
 export const arabicReceiptPayload: ArabicReceipt = {
@@ -49,6 +50,7 @@ export const arabicReceiptPayload: ArabicReceipt = {
   paidWith: "بطاقة بنكية",
   thankYouMessage: "شكرا لزيارتكم",
   printedByMessage: "طبع بواسطة: www.steppe.info",
+  qrCodeUrl: "https://www.steppe.info",
   items: [
     {
       name: "قهوة",
@@ -64,9 +66,6 @@ export const arabicReceiptPayload: ArabicReceipt = {
       unitPrice: 72305,
       discount: { type: "fixed", value: 25 }
     },
-    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
-    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
-    { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
     { name: "دفتر", quantity: 1, unitName: "قطعة", unitPrice: 1599 },
   ]
 };
