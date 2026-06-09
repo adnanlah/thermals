@@ -72,6 +72,28 @@ type MoneyTextParts = {
   amount: string;
 };
 
+type CellRect = { x: number; width: number };
+
+type PrintedByGeometry = {
+  qrSize: number;
+  textWidth: number;
+  textHeight: number;
+  blockHeight: number;
+  textX: number;
+};
+
+type ReceiptLayout = {
+  receipt: ArabicReceipt;
+  paymentMethod?: string;
+  thankYouMessage: string;
+  printedByMessage?: string;
+  qrCodeUrl?: string;
+  storeContactLines: string[];
+  tableColumns: TableColumn[];
+  itemRows: TableRow[];
+  summaryRows: SummaryRow[];
+};
+
 export type NodeCanvasArabicBitmapReceiptOptions = {
   /**
    * Defaults to receipt.paidWith when omitted. Pass null or an empty string to
@@ -122,20 +144,24 @@ const CURRENCY_GLYPHS_IN_RTL_VISUAL_ORDER = ["\u062c", ".", "\u062f"] as const;
 const PAYMENT_METHOD_LABEL = "\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062f\u0641\u0639:";
 const DEFAULT_THANK_YOU_MESSAGE = "\u0634\u0643\u0631\u0627 \u0644\u0632\u064a\u0627\u0631\u062a\u0643\u0645";
 const PRINTED_BY_TOP_MARGIN_DOTS = 8;
-const PRINTED_BY_BOTTOM_MARGIN_DOTS = 0;
-const PRINTED_BY_BOTTOM_SPACING_DOTS = 0;
+const PRINTED_BY_BOTTOM_MARGIN_DOTS = 8;
+const PRINTED_BY_BOTTOM_SPACING_DOTS = 8;
 const QR_CODE_SIZE_DOTS = 100;
 const QR_CODE_TEXT_GAP_DOTS = 8;
+const LABEL_ORDER_NUMBER = "رقم الطلب";
+const LABEL_CASHIER = "البائع";
+const LABEL_CLIENT = "العميل";
+const LABEL_POST_NUMBER = "رقم نقطة البيع";
 const MONEY_TEXT_PATTERN = new RegExp(
   `^(-?\\d+(?:\\.\\d+)?)\\s+${escapeRegExp(CURRENCY_LABEL)}$`,
   "u"
 );
-let isNotoNaskhRegistered = false;
+const registeredFontFamilies = new Set<string>();
 
 function createItemTableColumns(receipt: ArabicReceipt): TableColumn[] {
   return [
     {
-      title: `الصنف (${formatQuantity(getReceiptItemCount(receipt))})`,
+      title: `المنتج (${formatQuantity(getReceiptItemCount(receipt))})`,
       widthRatio: 0.34,
       align: "right",
       headerAlign: "right"
@@ -272,31 +298,26 @@ type RenderedAssets = {
   qrImage?: Image;
 };
 
-async function preRenderAssets(
-  layout: ReturnType<typeof createNodeCanvasReceiptLayout>
-): Promise<RenderedAssets> {
-  const barcodeBuffer = await bwipjs.toBuffer({
-    bcid: "code128",
-    text: layout.receipt.orderNumber,
-    scale: 2,
-    includetext: false,
-    paddingwidth: 0,
-    paddingheight: 0
-  });
-  const barcodeImage = await loadImage(barcodeBuffer);
-
-  let qrImage: Image | undefined;
-
-  if (layout.qrCodeUrl) {
-    const qrBuffer = await bwipjs.toBuffer({
-      bcid: "qrcode",
-      text: layout.qrCodeUrl,
-      scale: 3,
+async function preRenderAssets(layout: ReceiptLayout): Promise<RenderedAssets> {
+  const [barcodeImage, qrImage] = await Promise.all([
+    bwipjs.toBuffer({
+      bcid: "code128",
+      text: layout.receipt.orderNumber,
+      scale: 2,
+      includetext: false,
       paddingwidth: 0,
       paddingheight: 0
-    });
-    qrImage = await loadImage(qrBuffer);
-  }
+    }).then(loadImage),
+    layout.qrCodeUrl
+      ? bwipjs.toBuffer({
+          bcid: "qrcode",
+          text: layout.qrCodeUrl,
+          scale: 3,
+          paddingwidth: 0,
+          paddingheight: 0
+        }).then(loadImage)
+      : Promise.resolve(undefined)
+  ]);
 
   return { barcodeImage, qrImage };
 }
@@ -304,17 +325,7 @@ async function preRenderAssets(
 function createNodeCanvasReceiptLayout(
   receipt: ArabicReceipt,
   options: NodeCanvasArabicBitmapReceiptOptions
-): {
-  receipt: ArabicReceipt;
-  paymentMethod?: string;
-  thankYouMessage: string;
-  printedByMessage?: string;
-  qrCodeUrl?: string;
-  storeContactLines: string[];
-  tableColumns: TableColumn[];
-  itemRows: TableRow[];
-  summaryRows: SummaryRow[];
-} {
+): ReceiptLayout {
   const totals = calculateReceiptTotals(
     receipt.items,
     receipt.taxRate,
@@ -425,7 +436,7 @@ function createNodeCanvasReceiptLayout(
 
 function measureReceiptHeight(
   context: CanvasRenderingContext2D,
-  layout: ReturnType<typeof createNodeCanvasReceiptLayout>,
+  layout: ReceiptLayout,
   config: NormalizedArabicBitmapPrinterConfig
 ): number {
   const contentWidth = getContentWidth(config);
@@ -456,21 +467,11 @@ function measureReceiptHeight(
   y += measureTextBlock(context, layout.thankYouMessage, centeredStyle(26, config, 700), contentWidth) + THANK_YOU_BOTTOM_MARGIN_DOTS;
 
   if (layout.printedByMessage) {
-    const qrSize = layout.qrCodeUrl ? QR_CODE_SIZE_DOTS : 0;
-    const textWidth = qrSize > 0
-      ? contentWidth - qrSize - QR_CODE_TEXT_GAP_DOTS
-      : contentWidth;
-    const textHeight = measureTextBlock(
-      context,
-      layout.printedByMessage,
-      centeredStyle(18, config),
-      textWidth
-    );
-    const blockHeight = Math.max(textHeight, qrSize);
+    const geo = computePrintedByGeometry(context, layout.printedByMessage, layout.qrCodeUrl, config);
 
     y +=
       PRINTED_BY_TOP_MARGIN_DOTS +
-      blockHeight +
+      geo.blockHeight +
       PRINTED_BY_BOTTOM_MARGIN_DOTS +
       PRINTED_BY_BOTTOM_SPACING_DOTS;
   }
@@ -480,7 +481,7 @@ function measureReceiptHeight(
 
 function renderReceipt(
   context: CanvasRenderingContext2D,
-  layout: ReturnType<typeof createNodeCanvasReceiptLayout>,
+  layout: ReceiptLayout,
   config: NormalizedArabicBitmapPrinterConfig,
   heightDots: number,
   assets: RenderedAssets
@@ -527,34 +528,41 @@ function renderReceipt(
   if (layout.printedByMessage) {
     y += THANK_YOU_BOTTOM_MARGIN_DOTS + PRINTED_BY_TOP_MARGIN_DOTS;
 
-    const qrSize = layout.qrCodeUrl ? QR_CODE_SIZE_DOTS : 0;
-    const textX = PAGE_PADDING_DOTS + qrSize + (qrSize > 0 ? QR_CODE_TEXT_GAP_DOTS : 0);
-    const textWidth = qrSize > 0
-      ? contentWidth - qrSize - QR_CODE_TEXT_GAP_DOTS
-      : contentWidth;
-    const textHeight = measureTextBlock(
-      context,
-      layout.printedByMessage,
-      centeredStyle(18, config),
-      textWidth
-    );
-    const blockHeight = Math.max(textHeight, qrSize);
-    const textY = y + Math.round((blockHeight - textHeight) / 2);
+    const geo = computePrintedByGeometry(context, layout.printedByMessage, layout.qrCodeUrl, config);
+    const textY = y + Math.round((geo.blockHeight - geo.textHeight) / 2);
 
     if (layout.qrCodeUrl && assets.qrImage) {
-      const qrY = y + Math.round((blockHeight - qrSize) / 2);
-      context.drawImage(assets.qrImage, PAGE_PADDING_DOTS, qrY, qrSize, qrSize);
+      const qrY = y + Math.round((geo.blockHeight - geo.qrSize) / 2);
+      context.drawImage(assets.qrImage, PAGE_PADDING_DOTS, qrY, geo.qrSize, geo.qrSize);
     }
 
     drawTextBlock(
       context,
       layout.printedByMessage,
       centeredStyle(18, config),
-      textX,
+      geo.textX,
       textY,
-      textWidth
+      geo.textWidth
     );
   }
+}
+
+function computePrintedByGeometry(
+  context: CanvasRenderingContext2D,
+  message: string,
+  qrCodeUrl: string | undefined,
+  config: NormalizedArabicBitmapPrinterConfig
+): PrintedByGeometry {
+  const contentWidth = getContentWidth(config);
+  const qrSize = qrCodeUrl ? QR_CODE_SIZE_DOTS : 0;
+  const textWidth = qrSize > 0
+    ? contentWidth - qrSize - QR_CODE_TEXT_GAP_DOTS
+    : contentWidth;
+  const textHeight = measureTextBlock(context, message, centeredStyle(18, config), textWidth);
+  const blockHeight = Math.max(textHeight, qrSize);
+  const textX = PAGE_PADDING_DOTS + qrSize + (qrSize > 0 ? QR_CODE_TEXT_GAP_DOTS : 0);
+
+  return { qrSize, textWidth, textHeight, blockHeight, textX };
 }
 
 function drawOrderRow(
@@ -569,8 +577,8 @@ function drawOrderRow(
   cursorY = drawTwoColumnMetadataRow(
     context,
     style,
-    formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628", receipt.orderNumber),
-    formatMetadataLine("\u0627\u0644\u0643\u0627\u0634\u064a\u0631", receipt.cashier),
+    formatMetadataLine(LABEL_ORDER_NUMBER, receipt.orderNumber),
+    formatMetadataLine(LABEL_CASHIER, receipt.cashier),
     config,
     cursorY
   );
@@ -580,10 +588,10 @@ function drawOrderRow(
       context,
       style,
       receipt.clientName
-        ? formatMetadataLine("\u0627\u0644\u0639\u0645\u064a\u0644", receipt.clientName)
+        ? formatMetadataLine(LABEL_CLIENT, receipt.clientName)
         : "",
       receipt.cashierPostNumber
-        ? formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0645\u0646\u0635\u0628", receipt.cashierPostNumber)
+        ? formatMetadataLine(LABEL_POST_NUMBER, receipt.cashierPostNumber)
         : "",
       config,
       cursorY + 2
@@ -603,8 +611,8 @@ function measureOrderRow(
   let height = measureTwoColumnMetadataRow(
     context,
     style,
-    formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0637\u0644\u0628", receipt.orderNumber),
-    formatMetadataLine("\u0627\u0644\u0643\u0627\u0634\u064a\u0631", receipt.cashier),
+    formatMetadataLine(LABEL_ORDER_NUMBER, receipt.orderNumber),
+    formatMetadataLine(LABEL_CASHIER, receipt.cashier),
     halfWidth
   );
 
@@ -615,10 +623,10 @@ function measureOrderRow(
         context,
         style,
         receipt.clientName
-          ? formatMetadataLine("\u0627\u0644\u0639\u0645\u064a\u0644", receipt.clientName)
+          ? formatMetadataLine(LABEL_CLIENT, receipt.clientName)
           : "",
         receipt.cashierPostNumber
-          ? formatMetadataLine("\u0631\u0642\u0645 \u0627\u0644\u0645\u0646\u0635\u0628", receipt.cashierPostNumber)
+          ? formatMetadataLine(LABEL_POST_NUMBER, receipt.cashierPostNumber)
           : "",
         halfWidth
       );
@@ -770,14 +778,15 @@ function drawTable(
   y: number,
   drawHeader: boolean
 ): number {
+  const cellRects = getTableCellRects(columns, config);
   let cursorY = y;
 
   if (drawHeader) {
-    cursorY = drawTableHeader(context, columns, config, cursorY);
+    cursorY = drawTableHeader(context, columns, cellRects, config, cursorY);
   }
 
   for (const row of rows) {
-    cursorY = drawTableRow(context, row, columns, config, cursorY);
+    cursorY = drawTableRow(context, row, columns, cellRects, config, cursorY);
   }
 
   return cursorY;
@@ -790,12 +799,13 @@ function measureTable(
   config: NormalizedArabicBitmapPrinterConfig,
   includeHeader: boolean
 ): number {
+  const cellRects = getTableCellRects(columns, config);
   let height = includeHeader
-    ? measureTableRow(context, headerRow(columns), columns, config)
+    ? measureTableRow(context, headerRow(columns), columns, cellRects, config)
     : 0;
 
   for (const row of rows) {
-    height += measureTableRow(context, row, columns, config);
+    height += measureTableRow(context, row, columns, cellRects, config);
   }
 
   return height;
@@ -804,12 +814,13 @@ function measureTable(
 function drawTableHeader(
   context: CanvasRenderingContext2D,
   columns: TableColumn[],
+  cellRects: CellRect[],
   config: NormalizedArabicBitmapPrinterConfig,
   y: number
 ): number {
   const row = headerRow(columns);
-  const rowHeight = measureTableRow(context, row, columns, config);
-  const nextY = drawTableRow(context, row, columns, config, y);
+  const rowHeight = measureTableRow(context, row, columns, cellRects, config);
+  const nextY = drawTableRow(context, row, columns, cellRects, config, y);
 
   drawHorizontalLine(context, PAGE_PADDING_DOTS, y + rowHeight - 1, getContentWidth(config));
 
@@ -820,14 +831,14 @@ function drawTableRow(
   context: CanvasRenderingContext2D,
   row: TableRow,
   columns: TableColumn[],
+  cellRects: CellRect[],
   config: NormalizedArabicBitmapPrinterConfig,
   y: number
 ): number {
-  const cells = getTableCellRects(columns, config);
-  const rowHeight = measureTableRow(context, row, columns, config);
+  const rowHeight = measureTableRow(context, row, columns, cellRects, config);
 
   row.cells.forEach((cell, index) => {
-    const rect = cells[index];
+    const rect = cellRects[index];
     if (!rect || !cell.text) {
       return;
     }
@@ -857,11 +868,11 @@ function measureTableRow(
   context: CanvasRenderingContext2D,
   row: TableRow,
   columns: TableColumn[],
+  cellRects: CellRect[],
   config: NormalizedArabicBitmapPrinterConfig
 ): number {
-  const cells = getTableCellRects(columns, config);
   const maxCellHeight = row.cells.reduce((height, cell, index) => {
-    const rect = cells[index];
+    const rect = cellRects[index];
 
     if (!rect || !cell.text) {
       return height;
@@ -1151,7 +1162,7 @@ function registerBundledFontIfNeeded(fontFamily: string): void {
 }
 
 function registerNotoNaskhArabic(): void {
-  if (isNotoNaskhRegistered) {
+  if (registeredFontFamilies.has(NOTO_NASKH_FONT_FAMILY)) {
     return;
   }
 
@@ -1167,7 +1178,7 @@ function registerNotoNaskhArabic(): void {
     family: NOTO_NASKH_FONT_FAMILY,
     weight: "700"
   });
-  isNotoNaskhRegistered = true;
+  registeredFontFamilies.add(NOTO_NASKH_FONT_FAMILY);
 }
 
 function createFont(style: TextStyle): string {
@@ -1290,57 +1301,44 @@ function formatDiscountLabel(discount: ReceiptDiscount): string {
   return "\u062b\u0627\u0628\u062a";
 }
 
+function resolveOption(
+  options: NodeCanvasArabicBitmapReceiptOptions,
+  key: keyof NodeCanvasArabicBitmapReceiptOptions,
+  fallback: string | null | undefined
+): string | undefined {
+  const value = Object.prototype.hasOwnProperty.call(options, key)
+    ? options[key]
+    : fallback;
+
+  return normalizeOptionalText(value);
+}
+
 function resolvePaymentMethod(
   receipt: ArabicReceipt,
   options: NodeCanvasArabicBitmapReceiptOptions
 ): string | undefined {
-  const sourceValue = Object.prototype.hasOwnProperty.call(
-    options,
-    "paymentMethod"
-  )
-    ? options.paymentMethod
-    : receipt.paidWith;
-
-  return normalizeOptionalText(sourceValue);
+  return resolveOption(options, "paymentMethod", receipt.paidWith);
 }
 
 function resolveThankYouMessage(
   receipt: ArabicReceipt,
   options: NodeCanvasArabicBitmapReceiptOptions
 ): string {
-  const sourceValue = Object.prototype.hasOwnProperty.call(
-    options,
-    "thankYouMessage"
-  )
-    ? options.thankYouMessage
-    : receipt.thankYouMessage;
-
-  return normalizeOptionalText(sourceValue) ?? DEFAULT_THANK_YOU_MESSAGE;
+  return resolveOption(options, "thankYouMessage", receipt.thankYouMessage) ?? DEFAULT_THANK_YOU_MESSAGE;
 }
 
 function resolveQrCodeUrl(
   receipt: ArabicReceipt,
   options: NodeCanvasArabicBitmapReceiptOptions
 ): string | undefined {
-  const sourceValue = Object.prototype.hasOwnProperty.call(options, "qrCodeUrl")
-    ? options.qrCodeUrl
-    : receipt.qrCodeUrl;
-
-  return normalizeOptionalText(sourceValue);
+  return resolveOption(options, "qrCodeUrl", receipt.qrCodeUrl);
 }
 
 function resolvePrintedByMessage(
   receipt: ArabicReceipt,
   options: NodeCanvasArabicBitmapReceiptOptions
 ): string | undefined {
-  const sourceValue = Object.prototype.hasOwnProperty.call(
-    options,
-    "printedByMessage"
-  )
-    ? options.printedByMessage
-    : receipt.printedByMessage;
-
-  return normalizeOptionalText(sourceValue);
+  return resolveOption(options, "printedByMessage", receipt.printedByMessage);
 }
 
 function getStoreContactLines(receipt: ArabicReceipt): string[] {
@@ -1349,11 +1347,11 @@ function getStoreContactLines(receipt: ArabicReceipt): string[] {
   const lines: string[] = [];
 
   if (phones.length > 0) {
-    lines.push(`هاتف: ${phones.join(" / ")}`);
+    lines.push(`الهاتف: ${phones.join(" / ")}`);
   }
 
   if (email) {
-    lines.push(`البريد: ${email}`);
+    lines.push(`البريد الالكتروني: ${email}`);
   }
 
   return lines;
@@ -1368,7 +1366,7 @@ function getReceiptItemCount(receipt: ArabicReceipt): number {
 }
 
 function formatQuantity(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(value);
+  return Number.isInteger(value) ? String(value) : parseFloat(value.toFixed(2)).toString();
 }
 
 function normalizeOptionalText(value: string | null | undefined): string | undefined {

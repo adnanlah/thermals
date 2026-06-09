@@ -17,7 +17,7 @@ export function normalizeArabicBitmapPrinterConfig(
     printerDpi: Math.max(72, Math.floor(config.printerDpi)),
     renderScale: clampInteger(config.renderScale, 1, 4),
     monochromeThreshold: clampInteger(config.monochromeThreshold, 1, 255),
-    fontFamily: config.fontFamily.trim() || "Tahoma",
+    fontFamily: config.fontFamily.trim() || "Arial",
     feedAfterReceiptLines: Math.max(0, Math.floor(config.feedAfterReceiptLines))
   };
 }
